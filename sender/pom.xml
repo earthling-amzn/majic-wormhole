@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <artifactId>registrar</artifactId>
+  <artifactId>sender</artifactId>
   <version>0.1</version>
   <packaging>${packaging}</packaging>
 
@@ -17,8 +17,7 @@
     <jdk.version>17</jdk.version>
     <release.version>17</release.version>
     <micronaut.version>3.6.1</micronaut.version>
-    <micronaut.runtime>netty</micronaut.runtime>
-    <exec.mainClass>com.amazon.Application</exec.mainClass>
+    <exec.mainClass>com.amazon.SenderCommand</exec.mainClass>
   </properties>
 
   <repositories>
@@ -40,8 +39,14 @@
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>io.micronaut.cache</groupId>
-      <artifactId>micronaut-cache-caffeine</artifactId>
+      <groupId>io.micronaut</groupId>
+      <artifactId>micronaut-http-client</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut</groupId>
+      <artifactId>micronaut-http-server-netty</artifactId>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -59,18 +64,18 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>io.micronaut</groupId>
-      <artifactId>micronaut-http-client</artifactId>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.micronaut</groupId>
-      <artifactId>micronaut-http-server-netty</artifactId>
+      <groupId>info.picocli</groupId>
+      <artifactId>picocli</artifactId>
       <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>io.micronaut</groupId>
       <artifactId>micronaut-jackson-databind</artifactId>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut.picocli</groupId>
+      <artifactId>micronaut-picocli</artifactId>
       <scope>compile</scope>
     </dependency>
     <dependency>
@@ -82,6 +87,12 @@
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>
       <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut</groupId>
+      <artifactId>micronaut-http-server</artifactId>
+      <version>3.6.1</version>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
 
@@ -101,14 +112,14 @@
 
           <annotationProcessorPaths combine.children="append">
             <path>
-              <groupId>io.micronaut</groupId>
-              <artifactId>micronaut-http-validation</artifactId>
-              <version>${micronaut.version}</version>
+              <groupId>info.picocli</groupId>
+              <artifactId>picocli-codegen</artifactId>
+              <version>${picocli.version}</version>
             </path>
           </annotationProcessorPaths>
           <compilerArgs>
             <arg>-Amicronaut.processing.group=com.amazon</arg>
-            <arg>-Amicronaut.processing.module=wormhole</arg>
+            <arg>-Amicronaut.processing.module=sender</arg>
           </compilerArgs>
         </configuration>
       </plugin>
