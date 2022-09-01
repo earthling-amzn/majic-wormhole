@@ -7,9 +7,9 @@
   <packaging>${packaging}</packaging>
 
   <parent>
-    <groupId>com.amazon</groupId>
-    <artifactId>parent</artifactId>
-    <version>0.1</version>
+    <groupId>io.micronaut</groupId>
+    <artifactId>micronaut-parent</artifactId>
+    <version>3.6.1</version>
   </parent>
 
   <properties>
