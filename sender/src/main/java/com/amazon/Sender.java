@@ -10,9 +10,9 @@ import io.micronaut.http.server.types.files.SystemFile;
 
 import java.nio.file.Path;
 
-@Controller("/")
+@Controller
 public class Sender {
-    private SenderCommand.Registration registration;
+    private Registration registration;
     private Path fileToTransfer;
 
     @Get("/file")
@@ -28,7 +28,7 @@ public class Sender {
         return new SystemFile(fileToTransfer.toFile(), MediaType.APPLICATION_OCTET_STREAM_TYPE).attach(fileToTransfer.getFileName().toString());
     }
 
-    public void setRegistration(SenderCommand.Registration registration) {
+    public void setRegistration(Registration registration) {
         this.registration = registration;
     }
 

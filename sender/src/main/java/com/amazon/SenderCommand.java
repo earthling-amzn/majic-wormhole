@@ -1,11 +1,8 @@
 package com.amazon;
 
-import io.micronaut.configuration.picocli.PicocliRunner;
-import io.micronaut.context.ApplicationContext;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.client.HttpClient;
 import io.micronaut.http.server.HttpServerConfiguration;
-import io.micronaut.runtime.Micronaut;
 import jakarta.inject.Inject;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -16,10 +13,9 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-@Command(name = "sender", description = "...",
+@Command(name = "send", description = "...",
         mixinStandardHelpOptions = true)
 public class SenderCommand implements Runnable {
-    public record Registration(String address, long port, String passcode) {}
 
     @Inject
     HttpServerConfiguration serverConfiguration;
@@ -33,11 +29,8 @@ public class SenderCommand implements Runnable {
     @Option(names = {"-r", "--registrar"}, description = "Registrar address", defaultValue = "http://localhost:8080")
     String registrarAddress;
 
-    public static void main(String[] args) throws Exception {
-        ApplicationContext context = Micronaut.run(SenderCommand.class);
-        PicocliRunner.run(SenderCommand.class, context, args);
-    }
-
+    @Override
+    @Command(name = "send")
     public void run() {
         if (!Files.isRegularFile(fileToSend)) {
             String error = CommandLine.Help.Ansi.AUTO.string("@|bold,red Not a regular file: |@" + fileToSend);

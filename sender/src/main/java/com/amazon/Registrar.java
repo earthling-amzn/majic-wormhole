@@ -10,7 +10,7 @@ import jakarta.inject.Inject;
 
 import java.util.NoSuchElementException;
 
-@Controller("/")
+@Controller
 public class Registrar {
     @Inject
     HttpClientAddressResolver clientAddressResolver;

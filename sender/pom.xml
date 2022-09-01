@@ -17,7 +17,7 @@
     <jdk.version>17</jdk.version>
     <release.version>17</release.version>
     <micronaut.version>3.6.1</micronaut.version>
-    <exec.mainClass>com.amazon.SenderCommand</exec.mainClass>
+    <exec.mainClass>com.amazon.Wormhole</exec.mainClass>
   </properties>
 
   <repositories>
@@ -45,6 +45,11 @@
     <dependency>
       <groupId>io.micronaut</groupId>
       <artifactId>micronaut-http-server-netty</artifactId>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut.cache</groupId>
+      <artifactId>micronaut-cache-caffeine</artifactId>
       <scope>compile</scope>
     </dependency>
     <dependency>

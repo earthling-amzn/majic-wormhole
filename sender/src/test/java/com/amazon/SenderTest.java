@@ -8,7 +8,6 @@ import io.micronaut.http.client.HttpClient;
 import io.micronaut.http.client.annotation.Client;
 import io.micronaut.http.client.exceptions.HttpClientResponseException;
 import io.micronaut.http.exceptions.HttpStatusException;
-import io.micronaut.runtime.server.EmbeddedServer;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
@@ -19,14 +18,10 @@ import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 @MicronautTest
 public class SenderTest {
-    @Inject
-    EmbeddedServer server;
-
     @Inject
     Sender sender;
 
@@ -50,7 +45,7 @@ public class SenderTest {
     @Test
     public void testInvalidPasscode() {
         try {
-            var registration = new SenderCommand.Registration("127.0.0.1", 7070, "sorry-charlie");
+            var registration = new Registration("127.0.0.1", 7070, "sorry-charlie");
             sender.setRegistration(registration);
             var request = HttpRequest.GET("/file");
             request.getParameters().add("passcode", "passcode");
@@ -65,7 +60,7 @@ public class SenderTest {
     public void testTransferFile() {
         String fileContents = "Hello from the other side.";
         var toTransfer = createTransferFile(fileContents);
-        var registration = new SenderCommand.Registration("127.0.0.1", 7070, "sorry-charlie");
+        var registration = new Registration("127.0.0.1", 7070, "sorry-charlie");
         sender.setRegistration(registration);
         sender.setFileToTransfer(toTransfer.toPath());
         var request = HttpRequest.GET("/file");
@@ -73,6 +68,7 @@ public class SenderTest {
         var response = client.toBlocking().exchange(request, byte[].class);
         var received = response.body();
         var attachmentName = getAttachmentName(response);
+        assertNotNull(received, "No content received");
         assertEquals(fileContents, new String(received));
         assertEquals(toTransfer.toPath().getFileName().toString(), attachmentName);
     }

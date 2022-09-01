@@ -1,3 +1,11 @@
 micronaut:
   application:
-    name: sender
+    name: wormhole
+  caches:
+    registry:
+      maximum-size: 20
+      expire-after-write: 30m
+netty:
+  default:
+    allocator:
+      max-order: 3
