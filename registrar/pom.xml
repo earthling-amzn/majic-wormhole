@@ -108,7 +108,7 @@
           </annotationProcessorPaths>
           <compilerArgs>
             <arg>-Amicronaut.processing.group=com.amazon</arg>
-            <arg>-Amicronaut.processing.module=wormhole</arg>
+            <arg>-Amicronaut.processing.module=registrar</arg>
           </compilerArgs>
         </configuration>
       </plugin>

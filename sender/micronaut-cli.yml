@@ -1,6 +1,6 @@
-applicationType: cli
+applicationType: default
 defaultPackage: com.amazon
 testFramework: junit
 sourceLanguage: java
 buildTool: maven
-features: [annotation-api, app-name, jackson-databind, java, junit, logback, maven, picocli, picocli-java-application, picocli-junit, readme, shade, yaml]
+features: [annotation-api, app-name, http-client, jackson-databind, java, junit, logback, netty-server, maven, picocli, picocli-java-application, picocli-junit, readme, shade, yaml]
