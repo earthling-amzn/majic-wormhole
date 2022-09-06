@@ -1,12 +1,18 @@
 package com.amazon;
 
+import io.micronaut.core.io.buffer.ByteBuffer;
 import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
+import io.micronaut.http.client.DefaultHttpClientConfiguration;
 import io.micronaut.http.client.HttpClient;
+import io.micronaut.http.client.HttpClientConfiguration;
+import io.micronaut.http.client.StreamingHttpClient;
 import io.micronaut.http.exceptions.HttpStatusException;
+import reactor.core.publisher.Flux;
 
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -29,24 +35,59 @@ public class ReceiverCommand implements Runnable {
     @Option(names = {"-f", "--file"}, description = "Save file here, override suggested file name")
     String fileName;
 
+    private FileOutputStream outputStream;
+
     @Override
     public void run() {
         Registration registration = getRegistration();
 
-        try (var client = HttpClient.create(new URL("http", registration.address(), (int)registration.port(), ""))) {
+        HttpClientConfiguration configuration = new DefaultHttpClientConfiguration();
+        configuration.setMaxContentLength(0);
+        URL url = getUrl(registration);
+        try (var client = StreamingHttpClient.create(url, configuration)) {
             var request = HttpRequest.GET("/file");
             request.getParameters().add("passcode", passcode);
-            var response = client.toBlocking().exchange(request, byte[].class);
-            byte[] content = response.body();
-            if (content == null) {
-                throw new IllegalArgumentException("File content is missing.");
+            Flux.from(client.exchangeStream(request)).map(this::handleChunk).blockLast();
+            if (outputStream != null) {
+                try {
+                    outputStream.close();
+                } catch (IOException e) {
+                    System.out.println("Error closing stream: " + e.getMessage());
+                }
             }
-            if (fileName == null) {
-                fileName = getAttachmentName(response);
+        }
+    }
+
+    private static URL getUrl(Registration registration) {
+        try {
+            return new URL("http", registration.address(), (int) registration.port(), "");
+        } catch (MalformedURLException e) {
+            throw new IllegalArgumentException(e);
+        }
+    }
+
+    private long handleChunk(HttpResponse<ByteBuffer<?>> response) {
+        if (fileName == null) {
+            fileName = getAttachmentName(response);
+        }
+
+        if (outputStream == null) {
+            try {
+                outputStream = new FileOutputStream(fileName);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException(e);
             }
-            try (FileOutputStream fout = new FileOutputStream(fileName)) {
-                fout.write(content);
-            }
+        }
+
+        ByteBuffer<?> body = response.body();
+        if (body == null) {
+            throw new IllegalArgumentException("Response is missing content.");
+        }
+
+        try {
+            byte[] bytes = body.toByteArray();
+            outputStream.write(bytes);
+            return bytes.length;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -62,7 +103,7 @@ public class ReceiverCommand implements Runnable {
         }
     }
 
-    private String getAttachmentName(HttpResponse<byte[]> response) {
+    private String getAttachmentName(HttpResponse<?> response) {
         String disposition = response.header(HttpHeaders.CONTENT_DISPOSITION);
         if (disposition == null) {
             throw new HttpStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Server didn't send content disposition header.");
