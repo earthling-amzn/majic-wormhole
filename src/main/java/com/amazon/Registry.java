@@ -1,26 +1,29 @@
 package com.amazon;
 
-import io.micronaut.cache.CacheManager;
-import io.micronaut.cache.SyncCache;
-import jakarta.inject.Inject;
+import io.micronaut.context.annotation.Bean;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
+@Bean
 public class Registry {
-    @Inject
-    CacheManager<?> caches;
+
+    Map<String, Registration> registry = new ConcurrentHashMap<>();
 
     public Registration create(String clientAddress, long port) {
         String passcode = getPasscode();
-        SyncCache<?> registry = caches.getCache("registry");
         var registration = new Registration(clientAddress, port, passcode);
         registry.putIfAbsent(passcode, registration);
         return registration;
     }
 
     public Registration get(String passcode) {
-        SyncCache<?> registry = caches.getCache("registry");
-        return registry.get(passcode, Registration.class).orElseThrow();
+        Registration registration = registry.get(passcode);
+        if (registration == null) {
+            throw new IllegalArgumentException("No registration");
+        }
+        return registration;
     }
 
     private static final String[] PASSCODES = {
