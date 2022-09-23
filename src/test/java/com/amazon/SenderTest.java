@@ -1,13 +1,13 @@
 package com.amazon;
 
-import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.HttpRequest;
-import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
+import io.micronaut.http.MediaType;
+import io.micronaut.http.MutableHttpRequest;
 import io.micronaut.http.client.HttpClient;
 import io.micronaut.http.client.annotation.Client;
 import io.micronaut.http.client.exceptions.HttpClientResponseException;
-import io.micronaut.http.exceptions.HttpStatusException;
+import io.micronaut.http.client.multipart.MultipartBody;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
@@ -15,76 +15,71 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @MicronautTest
 public class SenderTest {
-    @Inject
-    Sender sender;
 
     @Inject
     @Client("/")
     HttpClient client;
 
+    @Inject
+    Receiver receiver;
+
     @Test
-    public void testIncompleteRegistration() {
+    public void testSendToReceiver() throws HttpClientResponseException, IOException {
+        // Normally, the sender would have the registry send the listening
+        // port of the receiver (big security hole!), but this test is running
+        // the registry and the receiver on the same interface and the http client
+        // is already automagically configured to find it.
+        Path targetDirectory = Files.createTempDirectory("transfer-test");
+        receiver.setAcceptor((username, filename, length) -> true);
+        receiver.setTargetDirectory(targetDirectory);
+
+        File transferFile = createTransferFile("Don't get too close!");
+        MutableHttpRequest<MultipartBody> upload = createUploadRequest(transferFile);
+
+        var response = client.toBlocking().retrieve(upload, HttpStatus.class);
+        assertEquals(HttpStatus.OK, response);
+        assertTrue(Files.isRegularFile(targetDirectory.resolve(transferFile.getName())));
+    }
+
+    @Test
+    public void testRejectedByReceiver() throws Exception {
+        Path targetDirectory = Files.createTempDirectory("transfer-test");
+        receiver.setAcceptor((username, filename, length) -> false);
+        receiver.setTargetDirectory(targetDirectory);
+
         try {
-            sender.setRegistration(null);
-            var request = HttpRequest.GET("/file");
-            request.getParameters().add("passcode", "passcode");
-            client.toBlocking().retrieve(request);
-            fail("Expected exception");
-        } catch (HttpClientResponseException e) {
-            assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, e.getStatus());
+            File transferFile = createTransferFile("To my fantasy!");
+            MutableHttpRequest<MultipartBody> upload = createUploadRequest(transferFile);
+            client.toBlocking().retrieve(upload, HttpStatus.class);
+            fail("Expected failure here.");
+        } catch (HttpClientResponseException  e) {
+            assertEquals(HttpStatus.NOT_ACCEPTABLE, e.getStatus());
+            assertTrue(isDirectoryEmpty(targetDirectory));
         }
     }
 
-    @Test
-    public void testInvalidPasscode() {
-        try {
-            var registration = new Registration("127.0.0.1", 7070, "sorry-charlie");
-            sender.setRegistration(registration);
-            var request = HttpRequest.GET("/file");
-            request.getParameters().add("passcode", "passcode");
-            client.toBlocking().retrieve(request);
-            fail("Expected exception");
-        } catch (HttpClientResponseException e) {
-            assertEquals(HttpStatus.UNAUTHORIZED, e.getStatus());
+    private boolean isDirectoryEmpty(Path targetDirectory) throws IOException {
+        try (Stream<Path> files = Files.list(targetDirectory)) {
+            return files.toList().isEmpty();
         }
     }
 
-    @Test
-    public void testTransferFile() {
-        String fileContents = "Hello from the other side.";
-        var toTransfer = createTransferFile(fileContents);
-        var registration = new Registration("127.0.0.1", 7070, "sorry-charlie");
-        sender.setRegistration(registration);
-        sender.setFileToTransfer(toTransfer.toPath());
-        var request = HttpRequest.GET("/file");
-        request.getParameters().add("passcode", "sorry-charlie");
-        var response = client.toBlocking().exchange(request, byte[].class);
-        var received = response.body();
-        var attachmentName = getAttachmentName(response);
-        assertNotNull(received, "No content received");
-        assertEquals(fileContents, new String(received));
-        assertEquals(toTransfer.toPath().getFileName().toString(), attachmentName);
-    }
-
-    private String getAttachmentName(HttpResponse<byte[]> response) {
-        String disposition = response.header(HttpHeaders.CONTENT_DISPOSITION);
-        if (disposition == null) {
-            throw new HttpStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Server didn't send content disposition header.");
-        }
-        // Content-Disposition -> attachment; filename="test7209689700109372498test"; filename*=utf-8''test7209689700109372498test
-        var pattern = Pattern.compile("filename=\"(.*?)\"");
-        Matcher matcher = pattern.matcher(disposition);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-        throw new HttpStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Server didn't send valid content disposition header.");
+    private static MutableHttpRequest<MultipartBody> createUploadRequest(File transferFile) {
+        MultipartBody formData = MultipartBody.builder()
+                .addPart("sender", "Captain Fantasy")
+                .addPart("upload", transferFile)
+                .addPart("length", "19")
+                .build();
+        return HttpRequest.POST("/file", formData)
+                .contentType(MediaType.MULTIPART_FORM_DATA_TYPE);
     }
 
     private File createTransferFile(String contents) {

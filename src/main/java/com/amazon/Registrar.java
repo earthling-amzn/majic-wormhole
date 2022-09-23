@@ -19,15 +19,17 @@ public class Registrar {
     Registry registry;
 
     @Get("/register")
-    public Registration register(HttpRequest<?> request, @QueryValue("port") long port) {
+    public Registration register(HttpRequest<?> request,
+                                 @QueryValue("username") String receiverName,
+                                 @QueryValue("target") long port) {
         String clientAddress = clientAddressResolver.resolve(request);
-        return registry.create(clientAddress, port);
+        return registry.create(receiverName, clientAddress, port);
     }
 
     @Get("/fetch")
-    public HttpResponse<?> fetch(@QueryValue("passcode") String passcode) {
+    public HttpResponse<?> fetch(@QueryValue("receiver") String receiverName) {
         try {
-            return HttpResponse.ok(registry.get(passcode));
+            return HttpResponse.ok(registry.get(receiverName));
         } catch (NoSuchElementException e) {
             return HttpResponse.notFound();
         }
