@@ -26,6 +26,9 @@ public class ReceiverCommand implements Runnable {
     @Option(names = {"-f", "--target-dir"}, description = "Save file here, override suggested file name")
     Path targetDirectory;
 
+    @Option(names = {"-y", "--accept"}, description = "Accept all files without prompting (for testing).")
+    boolean acceptAll = false;
+
     @Inject
     HttpServerConfiguration serverConfiguration;
 
@@ -42,7 +45,11 @@ public class ReceiverCommand implements Runnable {
 
         createRegistration();
         receiver.setTargetDirectory(targetDirectory);
-        receiver.setAcceptor(Receiver::deferToUser);
+        if (acceptAll) {
+            receiver.setAcceptor((username, filename, length) -> true);
+        } else {
+            receiver.setAcceptor(Receiver::deferToUser);
+        }
     }
 
     private Registration createRegistration() {

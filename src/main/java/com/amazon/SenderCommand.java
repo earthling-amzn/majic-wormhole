@@ -4,6 +4,7 @@ import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.MutableHttpRequest;
+import io.micronaut.http.client.DefaultHttpClientConfiguration;
 import io.micronaut.http.client.HttpClient;
 import io.micronaut.http.client.exceptions.HttpClientResponseException;
 import io.micronaut.http.client.multipart.MultipartBody;
@@ -16,6 +17,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 
 @Command(name = "send", description = "...",
         mixinStandardHelpOptions = true)
@@ -46,10 +48,13 @@ public class SenderCommand implements Runnable {
         URL url = getReceiverUrl(registration);
 
         // Now try to send it!
-        try (var client = HttpClient.create(url)) {
+        var configuration = new DefaultHttpClientConfiguration();
+        configuration.setReadTimeout(Duration.ofSeconds(30));
+        try (var client = HttpClient.create(url, configuration)) {
             var request = createUploadRequest();
-            client.toBlocking().retrieve(request);
-            CommandLine.Help.Ansi.AUTO.string("@|bold,green Transfer complete. |@");
+            client.toBlocking().exchange(request);
+            String message = CommandLine.Help.Ansi.AUTO.string("@|bold,green Transfer complete. |@");
+            System.out.println(message);
         } catch (HttpClientResponseException e) {
             if (e.getStatus() == HttpStatus.NOT_ACCEPTABLE) {
                 printError("Receiver rejected the file.");
@@ -78,8 +83,8 @@ public class SenderCommand implements Runnable {
         File transferFile = fileToSend.toFile();
         MultipartBody formData = MultipartBody.builder()
                 .addPart("sender", senderName)
-                .addPart("upload", transferFile)
                 .addPart("length", String.valueOf(transferFile.length()))
+                .addPart("upload", transferFile)
                 .build();
         return HttpRequest.POST("/file", formData)
                 .contentType(MediaType.MULTIPART_FORM_DATA_TYPE);

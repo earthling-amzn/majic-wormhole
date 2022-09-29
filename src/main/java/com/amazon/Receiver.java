@@ -1,11 +1,16 @@
 package com.amazon;
 
+import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
+import io.micronaut.http.MutableHttpResponse;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.multipart.StreamingFileUpload;
-import reactor.core.publisher.Mono;
+import org.reactivestreams.Publisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Flux;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,6 +19,7 @@ import java.nio.file.Path;
 
 @Controller
 public class Receiver {
+    private static final Logger logger = LoggerFactory.getLogger(Receiver.class);
 
     interface Acceptor {
         boolean accept(String sender, String filename, long length);
@@ -24,21 +30,22 @@ public class Receiver {
     private Acceptor acceptor;
 
     @Post(value = "/file", consumes = MediaType.MULTIPART_FORM_DATA)
-    HttpStatus handleFileUpload(StreamingFileUpload upload, int length, String sender) {
-        System.out.println("Handle upload from: " + sender);
-        System.out.println("Defined size: " + upload.getDefinedSize());
-        System.out.println("Size: " + upload.getSize());
-        System.out.println("Name: " + upload.getName());
-        System.out.println("Length: " + length);
-        System.out.println("File name: " + upload.getFilename());
-
+    Publisher<MutableHttpResponse<?>> handleFileUpload(StreamingFileUpload upload, int length, String sender) {
+        logger.info("Handle upload from: {}", sender);
+        logger.info("Defined size: {}", upload.getDefinedSize());
+        logger.info("Size: {}", upload.getSize());
+        logger.info("Name: {}", upload.getName());
+        logger.info("Length: {}", length);
+        logger.info("File name: {}", upload.getFilename());
         if (acceptor.accept(sender, upload.getFilename(), length)) {
             Path target = targetDirectory.resolve(upload.getFilename());
-            var succeeded = Mono.from(upload.transferTo(target.toFile())).block();
-            System.out.println("Wrote file to: " + target);
-            return Boolean.TRUE.equals(succeeded) ? HttpStatus.OK : HttpStatus.INTERNAL_SERVER_ERROR;
+            var internalError = HttpResponse.status(HttpStatus.INTERNAL_SERVER_ERROR, "Something bad happened");
+            var uploadSucceeded = HttpResponse.ok("Uploaded " + upload.getDefinedSize());
+            return Flux.from(upload.transferTo(target.toFile()))
+                    .map(success -> success ? uploadSucceeded : internalError)
+                    .onErrorReturn(internalError);
         }
-        return HttpStatus.NOT_ACCEPTABLE;
+        return Flux.just(HttpResponse.status(HttpStatus.NOT_ACCEPTABLE));
     }
 
     public void setTargetDirectory(Path targetDirectory) {

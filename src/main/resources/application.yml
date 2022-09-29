@@ -1,4 +1,8 @@
 micronaut:
+  server:
+    max-request-size: '100GB'
+    multipart:
+      max-file-size: '100GB'
   application:
     name: wormhole
   caches:
