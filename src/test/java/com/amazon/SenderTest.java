@@ -1,57 +1,45 @@
 package com.amazon;
 
-import io.micronaut.http.client.HttpClient;
-import io.micronaut.http.client.annotation.Client;
-import io.micronaut.http.client.exceptions.HttpClientResponseException;
-import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
-import jakarta.inject.Inject;
 import org.junit.jupiter.api.*;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.net.ConnectException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@MicronautTest
 public class SenderTest {
-
-    @Inject
-    @Client("/")
-    HttpClient client;
 
     private static Thread receiverThread;
 
-    public void setupReceiver(Path targetDirectory, Receiver.Acceptor acceptor) {
+    public void setupReceiver(Path targetDirectory, SimpleBlockingReceiver.Acceptor acceptor) throws InterruptedException {
         receiverThread = new Thread(() -> {
-            var receiver = new Receiver(9000);
+            var receiver = new ChannelReceiver(9000);
             receiver.setAcceptor(acceptor);
             receiver.setTargetDirectory(targetDirectory);
-            receiver.handleFileUpload();
+            receiver.receive();
         });
         receiverThread.setDaemon(true);
         receiverThread.start();
+        Thread.sleep(2000);
     }
 
     @AfterEach
-    public void teardownReceiver() {
-        try {
-            receiverThread.join();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+    public void teardownReceiver() throws InterruptedException {
+        receiverThread.join();
     }
 
     @Test
-    public void testSendToReceiver() throws HttpClientResponseException, IOException {
+    public void testSendToReceiver() throws Exception {
         var targetDirectory = Files.createTempDirectory("transfer-test");
         setupReceiver(targetDirectory, (username, filename, length) -> true);
 
         File transferFile = createTransferFile("Don't get too close!");
-        var sender = new SimpleBlockingSender("sender");
+        var sender = new ChannelSender("sender");
         sender.send(transferFile, "127.0.0.1", 9000);
         assertTrue(Files.isRegularFile(targetDirectory.resolve(transferFile.getName())));
     }

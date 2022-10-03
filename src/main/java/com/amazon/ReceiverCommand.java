@@ -3,7 +3,9 @@ package com.amazon;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.client.HttpClient;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
@@ -18,14 +20,42 @@ public class ReceiverCommand implements Runnable {
     @Option(names = {"-r", "--registrar"}, description = "Registrar address", defaultValue = "http://localhost:8080")
     String registrarAddress;
 
-    @Option(names = {"-p", "--username"}, description = "Your receiver name.", required = true)
+    @Option(names = {"-u", "--username"}, description = "Your receiver name.", required = true)
     String receiverName;
 
-    @Option(names = {"-f", "--target-dir"}, description = "Save file here, override suggested file name")
+    @Option(names = {"-t", "--target-dir"}, description = "Save file here, override suggested file name")
     Path targetDirectory;
 
     @Option(names = {"-y", "--accept"}, description = "Accept all files without prompting (for testing).")
     boolean acceptAll = false;
+
+    @Option(names = {"-f", "--forever"}, description = "Run forever.")
+    boolean runForever = false;
+
+    @Option(names = {"-p", "--port"}, description = "Port to listen on.")
+    int port = 9000;
+
+    @Option(names = {"-d", "--direct"}, description = "Use direct buffers for file transfer.")
+    boolean useDirect = false;
+
+    public static boolean deferToUser(String sender, String filename, long length) {
+        while (true) {
+            System.out.printf("Receive file named %s (%s bytes) from %s? y/n\n", filename, length, sender);
+            var reader = new BufferedReader(new InputStreamReader(System.in));
+            try {
+                String input = reader.readLine();
+                if ("y".equals(input)) {
+                    return true;
+                }
+                if ("n".equals(input)) {
+                    return false;
+                }
+                System.out.println("Please type 'y' or 'n'.");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
 
     @Override
     public void run() {
@@ -35,22 +65,22 @@ public class ReceiverCommand implements Runnable {
             throw new RuntimeException(e);
         }
 
-        var receiver = new Receiver(9000);
-        createRegistration(9000);
+        createRegistration();
+
+        var receiver = useDirect ? new ChannelReceiver(port) : new SimpleBlockingReceiver(port);
         receiver.setTargetDirectory(targetDirectory);
         if (acceptAll) {
             receiver.setAcceptor((username, filename, length) -> true);
         } else {
-            receiver.setAcceptor(Receiver::deferToUser);
+            receiver.setAcceptor(ReceiverCommand::deferToUser);
         }
 
-        //noinspection InfiniteLoopStatement
-        while (true) {
-            receiver.handleFileUpload();
-        }
+        do {
+            receiver.receive();
+        } while (runForever);
     }
 
-    private Registration createRegistration(int port) {
+    private Registration createRegistration() {
         try (var client = HttpClient.create(new URL(registrarAddress))) {
             var request = HttpRequest.GET("/register");
             request.getParameters().add("username", receiverName);

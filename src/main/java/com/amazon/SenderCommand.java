@@ -27,6 +27,9 @@ public class SenderCommand implements Runnable {
     @Option(names = {"-t", "--receiver"}, description = "The name of a registered receiver")
     String receiverName;
 
+    @Option(names = {"-d", "--direct"}, description = "Use direct buffers for file transfer.")
+    boolean useDirect = false;
+
     @Override
     @Command(name = "send")
     public void run() {
@@ -40,14 +43,14 @@ public class SenderCommand implements Runnable {
         var registration = getReceiverRegistration();
 
         try {
-            var sender = new SimpleBlockingSender(senderName);
+            var sender = useDirect ? new ChannelSender(senderName) : new SimpleBlockingSender(senderName);
             start = System.nanoTime();
             sender.send(fileToSend.toFile(), registration.address(), registration.port());
         } finally {
             long end = System.nanoTime();
             String message = CommandLine.Help.Ansi.AUTO.string("@|bold,green Transfer complete. |@");
             System.out.println(message);
-            System.out.println("Transfer time: " + ((end - start) / 1_000_000_000d) + "s.");
+            System.out.printf("Transfer time: %.5fs.\n", (end - start) / 1_000_000_000d);
         }
     }
 

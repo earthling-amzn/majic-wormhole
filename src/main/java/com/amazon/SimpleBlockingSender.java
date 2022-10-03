@@ -9,7 +9,9 @@ import java.io.IOException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
-public class SimpleBlockingSender {
+import static com.amazon.Receiver.CHUNK_SIZE;
+
+public class SimpleBlockingSender implements Sender {
     private static final Logger logger = LoggerFactory.getLogger(SimpleBlockingSender.class);
     private final String senderName;
 
@@ -17,6 +19,7 @@ public class SimpleBlockingSender {
         this.senderName = sender;
     }
 
+    @Override
     public void send(File source, String host, int port) {
         try (Socket s = new Socket(host, port);
              FileInputStream fin = new FileInputStream(source)) {
@@ -39,7 +42,7 @@ public class SimpleBlockingSender {
 
             int transferred = 0;
             int read;
-            byte[] chunk = new byte[10 * 1024 * 1024];
+            byte[] chunk = new byte[CHUNK_SIZE];
             while ((read = fin.read(chunk)) != -1) {
                 s.getOutputStream().write(chunk, 0, read);
                 transferred += read;
