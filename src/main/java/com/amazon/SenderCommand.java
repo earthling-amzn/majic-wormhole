@@ -38,6 +38,7 @@ public class SenderCommand implements Runnable {
     @Override
     @Command(name = "send")
     public void run() {
+        long start = System.nanoTime();
         if (!Files.isRegularFile(fileToSend)) {
             printError("Not a regular file: " + fileToSend);
             System.exit(2);
@@ -52,9 +53,8 @@ public class SenderCommand implements Runnable {
         configuration.setReadTimeout(Duration.ofSeconds(30));
         try (var client = HttpClient.create(url, configuration)) {
             var request = createUploadRequest();
+            start = System.nanoTime();
             client.toBlocking().exchange(request);
-            String message = CommandLine.Help.Ansi.AUTO.string("@|bold,green Transfer complete. |@");
-            System.out.println(message);
         } catch (HttpClientResponseException e) {
             if (e.getStatus() == HttpStatus.NOT_ACCEPTABLE) {
                 printError("Receiver rejected the file.");
@@ -63,6 +63,11 @@ public class SenderCommand implements Runnable {
             } else {
                 printError("Something unexpected happened: " + e.getStatus());
             }
+        } finally {
+            long end = System.nanoTime();
+            String message = CommandLine.Help.Ansi.AUTO.string("@|bold,green Transfer complete. |@");
+            System.out.println(message);
+            System.out.println("Transfer time: " + ((end - start) / 1_000_000_000d) + "s.");
         }
     }
 
