@@ -5,4 +5,4 @@ import io.micronaut.core.annotation.ReflectiveAccess;
 
 @Introspected
 @ReflectiveAccess
-public record Registration(String address, long port) {}
+public record Registration(String address, int port) {}

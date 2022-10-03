@@ -1,25 +1,20 @@
 package com.amazon;
 
-import io.micronaut.http.HttpResponse;
-import io.micronaut.http.HttpStatus;
-import io.micronaut.http.MediaType;
-import io.micronaut.http.MutableHttpResponse;
-import io.micronaut.http.annotation.Controller;
-import io.micronaut.http.annotation.Post;
-import io.micronaut.http.multipart.StreamingFileUpload;
-import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Flux;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.file.Path;
 
-@Controller
 public class Receiver {
     private static final Logger logger = LoggerFactory.getLogger(Receiver.class);
+    private final int port;
+
+    public Receiver(int port) {
+        this.port = port;
+    }
 
     interface Acceptor {
         boolean accept(String sender, String filename, long length);
@@ -29,23 +24,36 @@ public class Receiver {
 
     private Acceptor acceptor;
 
-    @Post(value = "/file", consumes = MediaType.MULTIPART_FORM_DATA)
-    Publisher<MutableHttpResponse<?>> handleFileUpload(StreamingFileUpload upload, int length, String sender) {
-        logger.info("Handle upload from: {}", sender);
-        logger.info("Defined size: {}", upload.getDefinedSize());
-        logger.info("Size: {}", upload.getSize());
-        logger.info("Name: {}", upload.getName());
-        logger.info("Length: {}", length);
-        logger.info("File name: {}", upload.getFilename());
-        if (acceptor.accept(sender, upload.getFilename(), length)) {
-            Path target = targetDirectory.resolve(upload.getFilename());
-            var internalError = HttpResponse.status(HttpStatus.INTERNAL_SERVER_ERROR, "Something bad happened");
-            var uploadSucceeded = HttpResponse.ok("Uploaded " + upload.getDefinedSize());
-            return Flux.from(upload.transferTo(target.toFile()))
-                    .map(success -> success ? uploadSucceeded : internalError)
-                    .onErrorReturn(internalError);
+    void handleFileUpload() {
+        try (ServerSocket ss = new ServerSocket(port)) {
+            Socket clientSocket = ss.accept();
+
+            var reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            String header = reader.readLine();
+            String[] parts = header.split(":", 3);
+            String sender = parts[0], filename = parts[2];
+            int length = Integer.parseInt(parts[1]);
+
+            if (!acceptor.accept(sender, filename, length)) {
+                clientSocket.getOutputStream().write(0);
+            } else {
+                clientSocket.getOutputStream().write(1);
+                Path filePath = targetDirectory.resolve(filename);
+                int read;
+                long transferred = 0;
+                try (InputStream upload = clientSocket.getInputStream();
+                     FileOutputStream fout = new FileOutputStream(filePath.toFile())) {
+                    byte[] chunk = new byte[10 * 1024 * 1024];
+                    while ((read = upload.read(chunk)) != -1) {
+                        fout.write(chunk, 0, read);
+                        transferred += read;
+                    }
+                }
+                System.out.println("Received: " + transferred);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
-        return Flux.just(HttpResponse.status(HttpStatus.NOT_ACCEPTABLE));
     }
 
     public void setTargetDirectory(Path targetDirectory) {

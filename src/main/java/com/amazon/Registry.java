@@ -10,7 +10,7 @@ public class Registry {
 
     Map<String, Registration> registry = new ConcurrentHashMap<>();
 
-    public Registration create(String receiverName, String clientAddress, long port) {
+    public Registration create(String receiverName, String clientAddress, int port) {
         var registration = new Registration(clientAddress, port);
         var value = registry.putIfAbsent(receiverName, registration);
         return value != null ? value : registration;

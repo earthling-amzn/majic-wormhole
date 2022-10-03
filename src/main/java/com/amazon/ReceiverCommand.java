@@ -2,8 +2,6 @@ package com.amazon;
 
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.client.HttpClient;
-import io.micronaut.http.server.HttpServerConfiguration;
-import jakarta.inject.Inject;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -29,12 +27,6 @@ public class ReceiverCommand implements Runnable {
     @Option(names = {"-y", "--accept"}, description = "Accept all files without prompting (for testing).")
     boolean acceptAll = false;
 
-    @Inject
-    HttpServerConfiguration serverConfiguration;
-
-    @Inject
-    Receiver receiver;
-
     @Override
     public void run() {
         try {
@@ -43,20 +35,26 @@ public class ReceiverCommand implements Runnable {
             throw new RuntimeException(e);
         }
 
-        createRegistration();
+        var receiver = new Receiver(9000);
+        createRegistration(9000);
         receiver.setTargetDirectory(targetDirectory);
         if (acceptAll) {
             receiver.setAcceptor((username, filename, length) -> true);
         } else {
             receiver.setAcceptor(Receiver::deferToUser);
         }
+
+        //noinspection InfiniteLoopStatement
+        while (true) {
+            receiver.handleFileUpload();
+        }
     }
 
-    private Registration createRegistration() {
+    private Registration createRegistration(int port) {
         try (var client = HttpClient.create(new URL(registrarAddress))) {
             var request = HttpRequest.GET("/register");
             request.getParameters().add("username", receiverName);
-            request.getParameters().add("target", String.valueOf(serverConfiguration.getPort().orElseThrow()));
+            request.getParameters().add("target", String.valueOf(port));
             return client.toBlocking().retrieve(request, Registration.class);
         } catch (MalformedURLException e) {
             throw new RuntimeException(e);

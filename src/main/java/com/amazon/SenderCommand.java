@@ -1,23 +1,15 @@
 package com.amazon;
 
 import io.micronaut.http.HttpRequest;
-import io.micronaut.http.HttpStatus;
-import io.micronaut.http.MediaType;
-import io.micronaut.http.MutableHttpRequest;
-import io.micronaut.http.client.DefaultHttpClientConfiguration;
 import io.micronaut.http.client.HttpClient;
-import io.micronaut.http.client.exceptions.HttpClientResponseException;
-import io.micronaut.http.client.multipart.MultipartBody;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 
 @Command(name = "send", description = "...",
         mixinStandardHelpOptions = true)
@@ -46,23 +38,11 @@ public class SenderCommand implements Runnable {
 
         // Try to get the address of the receiver so we know where to send the file
         var registration = getReceiverRegistration();
-        URL url = getReceiverUrl(registration);
 
-        // Now try to send it!
-        var configuration = new DefaultHttpClientConfiguration();
-        configuration.setReadTimeout(Duration.ofSeconds(30));
-        try (var client = HttpClient.create(url, configuration)) {
-            var request = createUploadRequest();
+        try {
+            var sender = new SimpleBlockingSender(senderName);
             start = System.nanoTime();
-            client.toBlocking().exchange(request);
-        } catch (HttpClientResponseException e) {
-            if (e.getStatus() == HttpStatus.NOT_ACCEPTABLE) {
-                printError("Receiver rejected the file.");
-            } else if (e.getStatus() == HttpStatus.INTERNAL_SERVER_ERROR) {
-                printError("Server encountered an error.");
-            } else {
-                printError("Something unexpected happened: " + e.getStatus());
-            }
+            sender.send(fileToSend.toFile(), registration.address(), registration.port());
         } finally {
             long end = System.nanoTime();
             String message = CommandLine.Help.Ansi.AUTO.string("@|bold,green Transfer complete. |@");
@@ -71,28 +51,9 @@ public class SenderCommand implements Runnable {
         }
     }
 
-    private static URL getReceiverUrl(Registration registration) {
-        try {
-            return new URL("http", registration.address(), (int) registration.port(), "/");
-        } catch (MalformedURLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     private void printError(String message) {
         String error = CommandLine.Help.Ansi.AUTO.string("@|bold,red " + message + " |@");
         System.out.println(error);
-    }
-
-    private MutableHttpRequest<MultipartBody> createUploadRequest() {
-        File transferFile = fileToSend.toFile();
-        MultipartBody formData = MultipartBody.builder()
-                .addPart("sender", senderName)
-                .addPart("length", String.valueOf(transferFile.length()))
-                .addPart("upload", transferFile)
-                .build();
-        return HttpRequest.POST("/file", formData)
-                .contentType(MediaType.MULTIPART_FORM_DATA_TYPE);
     }
 
     private Registration getReceiverRegistration() {

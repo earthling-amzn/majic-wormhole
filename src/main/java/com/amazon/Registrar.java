@@ -21,7 +21,7 @@ public class Registrar {
     @Get("/register")
     public Registration register(HttpRequest<?> request,
                                  @QueryValue("username") String receiverName,
-                                 @QueryValue("target") long port) {
+                                 @QueryValue("target") int port) {
         String clientAddress = clientAddressResolver.resolve(request);
         return registry.create(receiverName, clientAddress, port);
     }
