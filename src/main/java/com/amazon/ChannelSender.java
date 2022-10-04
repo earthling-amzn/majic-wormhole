@@ -9,13 +9,13 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 
-import static com.amazon.Receiver.CHUNK_SIZE;
-
 public class ChannelSender implements Sender {
     private final String senderName;
+    private final int chunkSize;
 
-    public ChannelSender(String senderName) {
+    public ChannelSender(String senderName, int chunkSize) {
         this.senderName = senderName;
+        this.chunkSize = chunkSize;
     }
 
     public void send(File source, String host, int port) {
@@ -38,7 +38,7 @@ public class ChannelSender implements Sender {
             FileChannel channel = fileInputStream.getChannel();
             long readFrom = 0;
             while (true) {
-                long transferred = channel.transferTo(readFrom, CHUNK_SIZE, socket);
+                long transferred = channel.transferTo(readFrom, chunkSize, socket);
                 if (transferred <= 0) {
                     break;
                 }

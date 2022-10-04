@@ -5,7 +5,6 @@ import org.junit.jupiter.api.*;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.net.ConnectException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
@@ -18,7 +17,7 @@ public class SenderTest {
 
     public void setupReceiver(Path targetDirectory, SimpleBlockingReceiver.Acceptor acceptor) throws InterruptedException {
         receiverThread = new Thread(() -> {
-            var receiver = new ChannelReceiver(9000);
+            var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE);
             receiver.setAcceptor(acceptor);
             receiver.setTargetDirectory(targetDirectory);
             receiver.receive();
@@ -28,7 +27,6 @@ public class SenderTest {
         Thread.sleep(2000);
     }
 
-    @AfterEach
     public void teardownReceiver() throws InterruptedException {
         receiverThread.join();
     }
@@ -39,8 +37,10 @@ public class SenderTest {
         setupReceiver(targetDirectory, (username, filename, length) -> true);
 
         File transferFile = createTransferFile("Don't get too close!");
-        var sender = new ChannelSender("sender");
+        var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE);
         sender.send(transferFile, "127.0.0.1", 9000);
+
+        teardownReceiver();
         assertTrue(Files.isRegularFile(targetDirectory.resolve(transferFile.getName())));
     }
 
@@ -50,8 +50,10 @@ public class SenderTest {
         setupReceiver(targetDirectory, (username, filename, length) -> false);
 
         File transferFile = createTransferFile("To my fantasy!");
-        var sender = new SimpleBlockingSender("sender");
+        var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE);
         sender.send(transferFile, "127.0.0.1", 9000);
+
+        teardownReceiver();
         assertTrue(isDirectoryEmpty(targetDirectory));
     }
 

@@ -7,9 +7,11 @@ import java.nio.file.Path;
 
 public class SimpleBlockingReceiver implements Receiver {
     private final int port;
+    private final int chunkSize;
 
-    public SimpleBlockingReceiver(int port) {
+    public SimpleBlockingReceiver(int port, int chunkSize) {
         this.port = port;
+        this.chunkSize = chunkSize;
     }
 
     private Path targetDirectory;
@@ -36,7 +38,7 @@ public class SimpleBlockingReceiver implements Receiver {
                 long transferred = 0;
                 try (InputStream upload = clientSocket.getInputStream();
                      FileOutputStream fout = new FileOutputStream(filePath.toFile())) {
-                    byte[] chunk = new byte[CHUNK_SIZE];
+                    byte[] chunk = new byte[chunkSize];
                     while ((read = upload.read(chunk)) != -1) {
                         fout.write(chunk, 0, read);
                         transferred += read;

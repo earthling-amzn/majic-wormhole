@@ -11,6 +11,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
 import static picocli.CommandLine.Command;
 import static picocli.CommandLine.Option;
 
@@ -37,6 +38,9 @@ public class ReceiverCommand implements Runnable {
 
     @Option(names = {"-d", "--direct"}, description = "Use direct buffers for file transfer.")
     boolean useDirect = false;
+
+    @Option(names = {"-c", "--chunk"}, description = "Chunk size for transfer buffer in bytes")
+    int chunkSize = DEFAULT_CHUNK_SIZE;
 
     public static boolean deferToUser(String sender, String filename, long length) {
         while (true) {
@@ -67,7 +71,7 @@ public class ReceiverCommand implements Runnable {
 
         createRegistration();
 
-        var receiver = useDirect ? new ChannelReceiver(port) : new SimpleBlockingReceiver(port);
+        Receiver receiver = getReceiver();
         receiver.setTargetDirectory(targetDirectory);
         if (acceptAll) {
             receiver.setAcceptor((username, filename, length) -> true);
@@ -78,6 +82,12 @@ public class ReceiverCommand implements Runnable {
         do {
             receiver.receive();
         } while (runForever);
+    }
+
+    private Receiver getReceiver() {
+        return useDirect
+                ? new ChannelReceiver(port, chunkSize)
+                : new SimpleBlockingReceiver(port, chunkSize);
     }
 
     private Registration createRegistration() {

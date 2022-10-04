@@ -7,6 +7,8 @@ import picocli.CommandLine;
 
 @CommandLine.Command(name="wormhole", subcommands = {SenderCommand.class, ReceiverCommand.class})
 public class Wormhole implements Runnable {
+    public static final int DEFAULT_CHUNK_SIZE = 10 * 1024 * 1024;
+
     public static void main(String[] args) {
         long start = System.nanoTime();
         if (args.length > 0 && ("send".equals(args[0]) || "recv".equals(args[0]))) {

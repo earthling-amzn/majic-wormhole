@@ -9,12 +9,14 @@ import java.nio.file.Path;
 
 public class ChannelReceiver implements Receiver {
     private final int port;
+    private final int chunkSize;
     private final ByteBuffer buffer;
     private final byte[] headers = new byte[1024];
 
-    public ChannelReceiver(int port) {
+    public ChannelReceiver(int port, int chunkSize) {
         this.port = port;
-        this.buffer = ByteBuffer.allocateDirect(Receiver.CHUNK_SIZE);
+        this.chunkSize = chunkSize;
+        this.buffer = ByteBuffer.allocateDirect(chunkSize);
     }
 
     private Path targetDirectory;

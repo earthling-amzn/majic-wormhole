@@ -11,6 +11,8 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
+
 @Command(name = "send", description = "...",
         mixinStandardHelpOptions = true)
 public class SenderCommand implements Runnable {
@@ -30,6 +32,9 @@ public class SenderCommand implements Runnable {
     @Option(names = {"-d", "--direct"}, description = "Use direct buffers for file transfer.")
     boolean useDirect = false;
 
+    @Option(names = {"-c", "--chunk"}, description = "Chunk size for transfer buffer in bytes")
+    int chunkSize = DEFAULT_CHUNK_SIZE;
+
     @Override
     @Command(name = "send")
     public void run() {
@@ -43,7 +48,7 @@ public class SenderCommand implements Runnable {
         var registration = getReceiverRegistration();
 
         try {
-            var sender = useDirect ? new ChannelSender(senderName) : new SimpleBlockingSender(senderName);
+            var sender = getSender();
             start = System.nanoTime();
             sender.send(fileToSend.toFile(), registration.address(), registration.port());
         } finally {
@@ -52,6 +57,12 @@ public class SenderCommand implements Runnable {
             System.out.println(message);
             System.out.printf("Transfer time: %.5fs.\n", (end - start) / 1_000_000_000d);
         }
+    }
+
+    private Sender getSender() {
+        return useDirect
+                ? new ChannelSender(senderName, chunkSize)
+                : new SimpleBlockingSender(senderName, chunkSize);
     }
 
     private void printError(String message) {

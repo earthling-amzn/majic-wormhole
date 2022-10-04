@@ -9,14 +9,14 @@ import java.io.IOException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
-import static com.amazon.Receiver.CHUNK_SIZE;
-
 public class SimpleBlockingSender implements Sender {
     private static final Logger logger = LoggerFactory.getLogger(SimpleBlockingSender.class);
     private final String senderName;
+    private final int chunkSize;
 
-    public SimpleBlockingSender(String sender) {
+    public SimpleBlockingSender(String sender, int chunkSize) {
         this.senderName = sender;
+        this.chunkSize = chunkSize;
     }
 
     @Override
@@ -42,7 +42,7 @@ public class SimpleBlockingSender implements Sender {
 
             int transferred = 0;
             int read;
-            byte[] chunk = new byte[CHUNK_SIZE];
+            byte[] chunk = new byte[chunkSize];
             while ((read = fin.read(chunk)) != -1) {
                 s.getOutputStream().write(chunk, 0, read);
                 transferred += read;
