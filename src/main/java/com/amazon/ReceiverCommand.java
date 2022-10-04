@@ -88,9 +88,10 @@ public class ReceiverCommand implements Runnable {
     }
 
     private Receiver getReceiver() {
+        Validator validator = validate ? new Validator() : null;
         return useDirect
-                ? new ChannelReceiver(port, chunkSize, validate)
-                : new SimpleBlockingReceiver(port, chunkSize, validate);
+                ? new ChannelReceiver(port, chunkSize, validator)
+                : new SimpleBlockingReceiver(port, chunkSize, validator);
     }
 
     private Registration createRegistration() {

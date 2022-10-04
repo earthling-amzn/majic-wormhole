@@ -28,7 +28,7 @@ public class SenderTest {
 
     @Test
     public void testAcceptedBySimpleReceiver() throws Exception {
-        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, new Validator());
         var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
 
         testAcceptedByReceiver(receiver, sender);
@@ -36,7 +36,7 @@ public class SenderTest {
 
     @Test
     public void testAcceptedByChannelReceiver() throws Exception {
-        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, new Validator());
         var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
 
         testAcceptedByReceiver(receiver, sender);
@@ -61,7 +61,7 @@ public class SenderTest {
 
     @Test
     public void testRejectedByChannelReceiver() throws Exception {
-        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, new Validator());
         var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
 
         testRejectedByReceiver(receiver, sender);
@@ -69,7 +69,7 @@ public class SenderTest {
 
     @Test
     public void testRejectedBySimpleReceiver() throws Exception {
-        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, new Validator());
         var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
 
         testRejectedByReceiver(receiver, sender);

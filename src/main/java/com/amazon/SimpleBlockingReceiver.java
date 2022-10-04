@@ -5,21 +5,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 
 public class SimpleBlockingReceiver implements Receiver {
     private final int port;
     private final int chunkSize;
-    private final boolean validate;
+    private final Validator validator;
 
-    public SimpleBlockingReceiver(int port, int chunkSize, boolean validate) {
+    public SimpleBlockingReceiver(int port, int chunkSize, Validator validator) {
         this.port = port;
         this.chunkSize = chunkSize;
-        this.validate = validate;
+        this.validator = validator;
     }
 
     private Path targetDirectory;
@@ -35,19 +31,13 @@ public class SimpleBlockingReceiver implements Receiver {
             int read = clientSocket.getInputStream().read(headerBytes);
             if (read <= 0) {
                 System.out.println("Did not read header");
+                clientSocket.getOutputStream().write(0);
                 return;
             }
 
             Header header = Header.decode(headerBytes);
-            MessageDigest md = null;
-            if (validate) {
-                if (header.checksum() != null) {
-                    md = MessageDigest.getInstance("MD5");
-                } else {
-                    System.out.println("Receiver requires checksum.");
-                    clientSocket.getOutputStream().write(0);
-                    return;
-                }
+            if (validator != null) {
+                validator.expect(header.checksum());
             }
 
             if (!acceptor.accept(header.sender(), header.filePath(), header.fileLength())) {
@@ -62,25 +52,19 @@ public class SimpleBlockingReceiver implements Receiver {
                     while ((read = upload.read(chunk)) != -1) {
                         fout.write(chunk, 0, read);
                         transferred += read;
-                        if (md != null) {
-                            md.update(chunk, 0, read);
+                        if (validator != null) {
+                            validator.update(chunk, 0, read);
                         }
                     }
                 }
-                System.out.println("Received: " + transferred);
-                if (md != null) {
-                    byte[] digest = md.digest();
-                    if (Arrays.equals(digest, header.checksum())) {
-                        System.out.println("Checksums match.");
-                    } else {
-                        System.err.printf("Checksum mismatch: Expected: %s, Received: %s\n",
-                                Wormhole.toHex(header.checksum()), Wormhole.toHex(digest));
-                        Files.delete(filePath);
-                        throw new IllegalStateException("Invalid digest.");
-                    }
+
+                if (validator != null) {
+                    validator.validate();
                 }
+
+                System.out.println("Received: " + transferred);
             }
-        } catch (IOException | NoSuchAlgorithmException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
