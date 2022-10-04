@@ -1,11 +1,15 @@
 package com.amazon;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 public class Validator {
+    private static final Logger logger = LoggerFactory.getLogger(Validator.class);
     private final MessageDigest digester;
     private byte[] expected;
 
@@ -34,10 +38,8 @@ public class Validator {
 
     public void validate() {
         byte[] digest = digester.digest();
-        if (Arrays.equals(digest, expected)) {
-            System.out.println("Checksums match.");
-        } else {
-            System.err.printf("Checksum mismatch: Expected: %s, Received: %s\n",
+        if (!Arrays.equals(digest, expected)) {
+            logger.error("Checksum mismatch: Expected: {}, Received: {}\n",
                     Wormhole.toHex(expected), Wormhole.toHex(digest));
             throw new IllegalStateException("Invalid digest.");
         }

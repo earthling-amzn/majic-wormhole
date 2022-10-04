@@ -25,6 +25,11 @@ public class ChannelReceiver implements Receiver {
     private SimpleBlockingReceiver.Acceptor acceptor;
 
     @Override
+    public void stop() {
+
+    }
+
+    @Override
     public void receive() {
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(port));

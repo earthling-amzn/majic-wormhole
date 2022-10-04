@@ -10,6 +10,8 @@ public interface Receiver {
 
     void setAcceptor(SimpleBlockingReceiver.Acceptor acceptor);
 
+    void stop();
+
     interface Acceptor {
         boolean accept(String sender, String filename, long length);
     }

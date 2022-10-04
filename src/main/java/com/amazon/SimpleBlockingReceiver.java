@@ -1,36 +1,81 @@
 package com.amazon;
 
+import com.amazon.Wormhole.NamingThreadFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.file.Path;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
 
 public class SimpleBlockingReceiver implements Receiver {
+    private static final Logger logger = LoggerFactory.getLogger(SimpleBlockingReceiver.class);
+
     private final int port;
     private final int chunkSize;
-    private final Validator validator;
-
-    public SimpleBlockingReceiver(int port, int chunkSize, Validator validator) {
-        this.port = port;
-        this.chunkSize = chunkSize;
-        this.validator = validator;
-    }
+    private final boolean validate;
 
     private Path targetDirectory;
 
     private Acceptor acceptor;
 
+    private volatile boolean shouldRun = true;
+
+    public SimpleBlockingReceiver(int port, int chunkSize, boolean validate) {
+        this.port = port;
+        this.chunkSize = chunkSize;
+        this.validate = validate;
+    }
+
+    public SimpleBlockingReceiver() {
+        this(9000, DEFAULT_CHUNK_SIZE, true);
+    }
+
+    public void stop() {
+        shouldRun = false;
+    }
+
     @Override
     public void receive() {
+        var executor = Executors.newFixedThreadPool(8, new NamingThreadFactory("Receiver"));
         try (ServerSocket ss = new ServerSocket(port)) {
-            Socket clientSocket = ss.accept();
+            ss.setSoTimeout(100);
+            while (shouldRun) {
+                try {
+                    Socket clientSocket = ss.accept();
+                    executor.submit(() -> receiveFile(clientSocket));
+                } catch (SocketTimeoutException ignore) {}
+            }
+            logger.info("Receiver is done.");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } finally {
+            executor.shutdown();
+            try {
+                while (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                    logger.info("Upload in progress");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
 
+    private void receiveFile(Socket clientSocket) {
+        try {
+            var validator = validate ? new Validator() : null;
             byte[] headerBytes =  new byte[1024];
             int read = clientSocket.getInputStream().read(headerBytes);
             if (read <= 0) {
-                System.out.println("Did not read header");
+                logger.warn("{} Did not read header: {}", clientSocket, read);
                 clientSocket.getOutputStream().write(0);
                 return;
             }
@@ -62,7 +107,7 @@ public class SimpleBlockingReceiver implements Receiver {
                     validator.validate();
                 }
 
-                System.out.println("Received: " + transferred);
+                logger.info("{} Received: {}, size: {}", clientSocket, filePath, transferred);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

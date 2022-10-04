@@ -10,6 +10,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @CommandLine.Command(name="wormhole", subcommands = {SenderCommand.class, ReceiverCommand.class})
 public class Wormhole implements Runnable {
@@ -54,5 +56,21 @@ public class Wormhole implements Runnable {
     @Override
     public void run() {
         System.out.println("Registrar is listening");
+    }
+
+    static class NamingThreadFactory implements ThreadFactory {
+        private final AtomicInteger count = new AtomicInteger(1);
+        private final String prefix;
+
+        NamingThreadFactory(String prefix) {
+            this.prefix = prefix;
+        }
+
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r);
+            t.setName(prefix + "-" + count.getAndIncrement());
+            return t;
+        }
     }
 }

@@ -13,9 +13,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class SenderTest {
 
-    private static Thread receiverThread;
+    private Thread receiverThread;
+    private Receiver receiver;
 
-    public void setupChanelReceiver(final Receiver receiver) throws InterruptedException {
+    public void setupChannelReceiver(final Receiver receiver) throws InterruptedException {
+        this.receiver = receiver;
         receiverThread = new Thread(receiver::receive);
         receiverThread.setDaemon(true);
         receiverThread.start();
@@ -23,12 +25,14 @@ public class SenderTest {
     }
 
     public void teardownReceiver() throws InterruptedException {
+        receiver.stop();
+        receiverThread.interrupt();
         receiverThread.join();
     }
 
     @Test
     public void testAcceptedBySimpleReceiver() throws Exception {
-        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, new Validator());
+        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
         var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
 
         testAcceptedByReceiver(receiver, sender);
@@ -48,7 +52,7 @@ public class SenderTest {
 
         receiver.setAcceptor((username, filename, length) -> true);
         receiver.setTargetDirectory(targetDirectory);
-        setupChanelReceiver(receiver);
+        setupChannelReceiver(receiver);
 
         try {
             sender.send(transferFile, "127.0.0.1", 9000);
@@ -69,7 +73,7 @@ public class SenderTest {
 
     @Test
     public void testRejectedBySimpleReceiver() throws Exception {
-        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, new Validator());
+        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
         var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
 
         testRejectedByReceiver(receiver, sender);
@@ -81,15 +85,50 @@ public class SenderTest {
 
         receiver.setAcceptor((username, filename, length) -> false);
         receiver.setTargetDirectory(targetDirectory);
-        setupChanelReceiver(receiver);
+        setupChannelReceiver(receiver);
 
-        try{
+        try {
             sender.send(transferFile, "127.0.0.1", 9000);
         } finally {
             teardownReceiver();
         }
 
         assertTrue(isDirectoryEmpty(targetDirectory));
+    }
+
+    @Test
+    public void testSendDirectoryWithBlockingIO() throws IOException, InterruptedException {
+        var targetDirectory = Files.createTempDirectory("directory-test");
+        var sourceDirectory = populateSourceDirectory(5);
+        var receiver = new SimpleBlockingReceiver();
+        var sender = new SimpleBlockingSender("sender");
+
+        receiver.setAcceptor((username, filename, length) -> true);
+        receiver.setTargetDirectory(targetDirectory);
+        setupChannelReceiver(receiver);
+
+        try {
+            sender.send(sourceDirectory.toFile(), "127.0.0.1", 9000);
+        } finally {
+            teardownReceiver();
+        }
+        assertEquals(5, getFileCount(targetDirectory));
+    }
+
+    private static int getFileCount(Path targetDirectory) {
+        File[] files = targetDirectory.toFile().listFiles();
+        return files != null ? files.length : 0;
+    }
+
+    private Path populateSourceDirectory(int fileCount) throws IOException {
+        Path sourceDirectory = Files.createTempDirectory("source");
+        for (int i = 0; i < fileCount; ++i) {
+            Path f = Files.createTempFile(sourceDirectory, "source", "source");
+            try (var writer = new FileWriter(f.toFile())) {
+                writer.write("This is file: " + i);
+            }
+        }
+        return sourceDirectory;
     }
 
     private boolean isDirectoryEmpty(Path targetDirectory) throws IOException {
