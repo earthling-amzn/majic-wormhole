@@ -9,6 +9,8 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 
+import static com.amazon.Receiver.CHUNK_SIZE;
+
 public class ChannelSender implements Sender {
     private final String senderName;
 
@@ -18,7 +20,7 @@ public class ChannelSender implements Sender {
 
     public void send(File source, String host, int port) {
         try (SocketChannel socket = SocketChannel.open(new InetSocketAddress(host, port));
-             FileInputStream fis = new FileInputStream(source)) {
+             FileInputStream fileInputStream = new FileInputStream(source)) {
 
             String header = senderName + ":" + source.length() + ":" + source.getName() +"\n";
             socket.write(ByteBuffer.wrap(header.getBytes(StandardCharsets.UTF_8)));
@@ -33,12 +35,11 @@ public class ChannelSender implements Sender {
                 return;
             }
 
-            FileChannel channel = fis.getChannel();
+            FileChannel channel = fileInputStream.getChannel();
             long readFrom = 0;
             while (true) {
-                long transferred = channel.transferTo(readFrom, Receiver.CHUNK_SIZE, socket);
+                long transferred = channel.transferTo(readFrom, CHUNK_SIZE, socket);
                 if (transferred <= 0) {
-                    System.out.println("Transfer complete? " + transferred);
                     break;
                 }
                 readFrom += transferred;
