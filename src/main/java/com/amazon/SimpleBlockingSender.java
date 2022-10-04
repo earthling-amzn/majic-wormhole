@@ -50,7 +50,7 @@ public class SimpleBlockingSender implements Sender {
         queue.addLast(source);
         ExecutorService executor = null;
         try  {
-            executor = Executors.newFixedThreadPool(8, new NamingThreadFactory("Sender"));
+            executor = Executors.newFixedThreadPool(8, new NamingThreadFactory("tx"));
             for (int i = 0; i < 8; ++i) {
                 executor.submit(() -> processWork(queue, host, port));
             }

@@ -45,7 +45,7 @@ public class SimpleBlockingReceiver implements Receiver {
 
     @Override
     public void receive() {
-        var executor = Executors.newFixedThreadPool(8, new NamingThreadFactory("Receiver"));
+        var executor = Executors.newFixedThreadPool(8, new NamingThreadFactory("rx"));
         try (ServerSocket ss = new ServerSocket(port)) {
             ss.setSoTimeout(100);
             while (shouldRun) {

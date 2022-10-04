@@ -21,6 +21,7 @@ public class SenderTest {
         receiverThread = new Thread(receiver::receive);
         receiverThread.setDaemon(true);
         receiverThread.start();
+        receiverThread.setName("Receiver");
         Thread.sleep(100);
     }
 
@@ -40,7 +41,7 @@ public class SenderTest {
 
     @Test
     public void testAcceptedByChannelReceiver() throws Exception {
-        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, new Validator());
+        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
         var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
 
         testAcceptedByReceiver(receiver, sender);
@@ -65,7 +66,7 @@ public class SenderTest {
 
     @Test
     public void testRejectedByChannelReceiver() throws Exception {
-        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, new Validator());
+        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
         var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
 
         testRejectedByReceiver(receiver, sender);
@@ -97,11 +98,22 @@ public class SenderTest {
     }
 
     @Test
-    public void testSendDirectoryWithBlockingIO() throws IOException, InterruptedException {
-        var targetDirectory = Files.createTempDirectory("directory-test");
-        var sourceDirectory = populateSourceDirectory(5);
+    public void testSendDirectoryWithSimpleReceiver() throws Exception {
         var receiver = new SimpleBlockingReceiver();
         var sender = new SimpleBlockingSender("sender");
+        testSendDirectory(receiver, sender);
+    }
+
+    @Test
+    public void testSendDirectoryWithChannelReceiver() throws Exception {
+        var receiver = new ChannelReceiver();
+        var sender = new ChannelSender("sender");
+        testSendDirectory(receiver, sender);
+    }
+
+    private void testSendDirectory(Receiver receiver, Sender sender) throws Exception {
+        var targetDirectory = Files.createTempDirectory("directory-test");
+        var sourceDirectory = populateSourceDirectory(5);
 
         receiver.setAcceptor((username, filename, length) -> true);
         receiver.setTargetDirectory(targetDirectory);
