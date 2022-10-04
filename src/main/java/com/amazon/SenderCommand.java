@@ -35,6 +35,9 @@ public class SenderCommand implements Runnable {
     @Option(names = {"-c", "--chunk"}, description = "Chunk size for transfer buffer in bytes")
     int chunkSize = DEFAULT_CHUNK_SIZE;
 
+    @Option(names = {"-v", "--validate"}, description = "Send checksum of transferred file for validation")
+    boolean validate;
+
     @Override
     @Command(name = "send")
     public void run() {
@@ -61,8 +64,8 @@ public class SenderCommand implements Runnable {
 
     private Sender getSender() {
         return useDirect
-                ? new ChannelSender(senderName, chunkSize)
-                : new SimpleBlockingSender(senderName, chunkSize);
+                ? new ChannelSender(senderName, chunkSize, validate)
+                : new SimpleBlockingSender(senderName, chunkSize, validate);
     }
 
     private void printError(String message) {

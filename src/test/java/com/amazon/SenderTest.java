@@ -15,16 +15,11 @@ public class SenderTest {
 
     private static Thread receiverThread;
 
-    public void setupReceiver(Path targetDirectory, SimpleBlockingReceiver.Acceptor acceptor) throws InterruptedException {
-        receiverThread = new Thread(() -> {
-            var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE);
-            receiver.setAcceptor(acceptor);
-            receiver.setTargetDirectory(targetDirectory);
-            receiver.receive();
-        });
+    public void setupChanelReceiver(final Receiver receiver) throws InterruptedException {
+        receiverThread = new Thread(receiver::receive);
         receiverThread.setDaemon(true);
         receiverThread.start();
-        Thread.sleep(2000);
+        Thread.sleep(100);
     }
 
     public void teardownReceiver() throws InterruptedException {
@@ -32,28 +27,68 @@ public class SenderTest {
     }
 
     @Test
-    public void testSendToReceiver() throws Exception {
+    public void testAcceptedBySimpleReceiver() throws Exception {
+        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
+
+        testAcceptedByReceiver(receiver, sender);
+    }
+
+    @Test
+    public void testAcceptedByChannelReceiver() throws Exception {
+        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
+
+        testAcceptedByReceiver(receiver, sender);
+    }
+
+    private void testAcceptedByReceiver(Receiver receiver, Sender sender) throws Exception {
         var targetDirectory = Files.createTempDirectory("transfer-test");
-        setupReceiver(targetDirectory, (username, filename, length) -> true);
+        File transferFile = createTransferFile();
 
-        File transferFile = createTransferFile("Don't get too close!");
-        var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE);
-        sender.send(transferFile, "127.0.0.1", 9000);
+        receiver.setAcceptor((username, filename, length) -> true);
+        receiver.setTargetDirectory(targetDirectory);
+        setupChanelReceiver(receiver);
 
-        teardownReceiver();
+        try {
+            sender.send(transferFile, "127.0.0.1", 9000);
+        } finally {
+            teardownReceiver();
+        }
+
         assertTrue(Files.isRegularFile(targetDirectory.resolve(transferFile.getName())));
     }
 
     @Test
-    public void testRejectedByReceiver() throws Exception {
+    public void testRejectedByChannelReceiver() throws Exception {
+        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
+
+        testRejectedByReceiver(receiver, sender);
+    }
+
+    @Test
+    public void testRejectedBySimpleReceiver() throws Exception {
+        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
+
+        testRejectedByReceiver(receiver, sender);
+    }
+
+    private void testRejectedByReceiver(Receiver receiver, Sender sender) throws Exception {
         var targetDirectory = Files.createTempDirectory("transfer-test");
-        setupReceiver(targetDirectory, (username, filename, length) -> false);
+        var transferFile = createTransferFile();
 
-        File transferFile = createTransferFile("To my fantasy!");
-        var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE);
-        sender.send(transferFile, "127.0.0.1", 9000);
+        receiver.setAcceptor((username, filename, length) -> false);
+        receiver.setTargetDirectory(targetDirectory);
+        setupChanelReceiver(receiver);
 
-        teardownReceiver();
+        try{
+            sender.send(transferFile, "127.0.0.1", 9000);
+        } finally {
+            teardownReceiver();
+        }
+
         assertTrue(isDirectoryEmpty(targetDirectory));
     }
 
@@ -63,12 +98,12 @@ public class SenderTest {
         }
     }
 
-    private File createTransferFile(String contents) {
+    private File createTransferFile() {
         try {
             File f = File.createTempFile("test", "test");
             f.deleteOnExit();
             try (FileWriter writer = new FileWriter(f)) {
-                writer.write(contents);
+                writer.write("Uninteresting text content");
             }
             return f;
         } catch (IOException e) {

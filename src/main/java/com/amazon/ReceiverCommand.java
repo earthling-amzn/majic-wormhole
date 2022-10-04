@@ -42,6 +42,9 @@ public class ReceiverCommand implements Runnable {
     @Option(names = {"-c", "--chunk"}, description = "Chunk size for transfer buffer in bytes")
     int chunkSize = DEFAULT_CHUNK_SIZE;
 
+    @Option(names = {"-v", "--validate"}, description = "Validate checksum (md5) of received file")
+    boolean validate = false;
+
     public static boolean deferToUser(String sender, String filename, long length) {
         while (true) {
             System.out.printf("Receive file named %s (%s bytes) from %s? y/n\n", filename, length, sender);
@@ -86,8 +89,8 @@ public class ReceiverCommand implements Runnable {
 
     private Receiver getReceiver() {
         return useDirect
-                ? new ChannelReceiver(port, chunkSize)
-                : new SimpleBlockingReceiver(port, chunkSize);
+                ? new ChannelReceiver(port, chunkSize, validate)
+                : new SimpleBlockingReceiver(port, chunkSize, validate);
     }
 
     private Registration createRegistration() {

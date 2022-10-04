@@ -7,16 +7,17 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 
 public class SimpleBlockingSender implements Sender {
     private static final Logger logger = LoggerFactory.getLogger(SimpleBlockingSender.class);
     private final String senderName;
     private final int chunkSize;
+    private final boolean validate;
 
-    public SimpleBlockingSender(String sender, int chunkSize) {
+    public SimpleBlockingSender(String sender, int chunkSize, boolean validate) {
         this.senderName = sender;
         this.chunkSize = chunkSize;
+        this.validate = validate;
     }
 
     @Override
@@ -24,10 +25,10 @@ public class SimpleBlockingSender implements Sender {
         try (Socket s = new Socket(host, port);
              FileInputStream fin = new FileInputStream(source)) {
 
-            // Encode header as string
-            String header = senderName + ":" + source.length() + ":" + source.getName() +"\n";
+            var checksum = validate ? Wormhole.hash(source) : null;
+            var header = new Header(senderName, source.getName(), source.length(), checksum);
             logger.info("Sending upload request: {}", header);
-            s.getOutputStream().write(header.getBytes(StandardCharsets.UTF_8));
+            s.getOutputStream().write(header.encode());
 
             // Wait for response for receiver to proceed.
             int proceed = s.getInputStream().read();
