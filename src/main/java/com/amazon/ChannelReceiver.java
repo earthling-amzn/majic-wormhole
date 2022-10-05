@@ -94,18 +94,21 @@ public class ChannelReceiver implements Receiver {
     private boolean receiveFile(SocketChannel clientSocket) {
         try {
             var validator = validate ? new Validator() : null;
-            var headers = new byte[1024];
-            var headerBuffer = ByteBuffer.wrap(headers);
-            int read = clientSocket.read(headerBuffer);
+            var buffer = buffers.get();
+
+            buffer.clear();
+            int read = clientSocket.read(buffer);
             if (read <= 0) {
                 logger.warn("Did not read header: {}", read);
                 return false;
             }
 
-            var header = Header.decode(headers);
+            buffer.flip();
+            var header = Header.decode(buffer);
             if (validator != null) {
                 validator.expect(header.checksum());
             }
+            assert buffer.remaining() == 0: "Buffer should be empty here";
 
             if (!acceptor.accept(header.sender(), header.filePath(), header.fileLength())) {
                 clientSocket.write(ByteBuffer.wrap(new byte[] {0}));
@@ -116,14 +119,15 @@ public class ChannelReceiver implements Receiver {
                 Files.createDirectories(filePath.getParent());
 
                 long writeTo = 0;
-                var buffer = this.buffers.get();
-
+                long remaining = header.fileLength();
                 logger.info("Creating file at: <{}>", filePath);
                 try (var fileOutputStream = new FileOutputStream(filePath.toFile());
                      var fileChannel = fileOutputStream.getChannel()) {
 
                     while (true) {
+                        long toRead = Math.min(remaining, chunkSize);
                         buffer.clear();
+                        buffer.limit((int) toRead);
                         read = clientSocket.read(buffer);
                         if (read <= 0) {
                             break;
@@ -137,9 +141,9 @@ public class ChannelReceiver implements Receiver {
                             buffer.flip();
                             validator.update(buffer);
                         }
-
+                        remaining -= wrote;
                         writeTo += wrote;
-                        if (writeTo == header.fileLength()) {
+                        if (remaining == 0) {
                             break;
                         }
                     }

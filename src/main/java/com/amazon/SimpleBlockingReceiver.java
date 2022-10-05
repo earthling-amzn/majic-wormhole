@@ -95,21 +95,29 @@ public class SimpleBlockingReceiver implements Receiver {
                 clientSocket.getOutputStream().write(0);
             } else {
                 clientSocket.getOutputStream().write(1);
+                logger.info("{} Accepted: {}", clientSocket, header);
+
                 Path withoutRoot = Wormhole.removeRoot(header.filePath());
                 Path filePath = targetDirectory.resolve(withoutRoot);
                 Files.createDirectories(filePath.getParent());
 
-                long transferred = 0;
                 InputStream upload = clientSocket.getInputStream();
                 try (FileOutputStream fout = new FileOutputStream(filePath.toFile())) {
                     byte[] chunk = new byte[chunkSize];
-                    while ((read = upload.read(chunk)) != -1) {
+                    long remaining = header.fileLength();
+                    while (true) {
+                        long toRead = Math.min(remaining, chunkSize);
+                        read = upload.read(chunk, 0, (int) toRead);
+                        if (read <= 0) {
+                            break;
+                        }
+
                         fout.write(chunk, 0, read);
-                        transferred += read;
+                        remaining -= read;
                         if (validator != null) {
                             validator.update(chunk, 0, read);
                         }
-                        if (transferred == header.fileLength()) {
+                        if (remaining == 0) {
                             break;
                         }
                     }
@@ -119,7 +127,7 @@ public class SimpleBlockingReceiver implements Receiver {
                     validator.validate();
                 }
 
-                logger.info("{} Received: {}, size: {}", clientSocket, filePath, transferred);
+                logger.info("{} Received: {}, size: {}", clientSocket, filePath, header.fileLength());
             }
         } catch (IOException e) {
             logger.warn("Error receiving file.", e);

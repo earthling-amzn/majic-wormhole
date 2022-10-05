@@ -47,4 +47,27 @@ public record Header(String sender, String filePath, long fileLength, byte[] che
 
         return new Header(sender, filePath, fileLength, checksum);
     }
+
+    static Header decode(ByteBuffer buffer) {
+        var senderLength = buffer.getShort();
+        var encoded = new byte[senderLength];
+        buffer.get(encoded, 0, senderLength);
+        var sender = new String(encoded, StandardCharsets.UTF_8);
+
+        var filePathLength = buffer.getShort();
+        encoded = new byte[filePathLength];
+        buffer.get(encoded, 0, filePathLength);
+        var filePath = new String(encoded, StandardCharsets.UTF_8);
+
+        var fileLength = buffer.getLong();
+
+        var checksumLength = buffer.getShort();
+        byte [] checksum = null;
+        if (checksumLength != 0) {
+            checksum = new byte[checksumLength];
+            buffer.get(checksum, 0, checksumLength);
+        }
+
+        return new Header(sender, filePath, fileLength, checksum);
+    }
 }

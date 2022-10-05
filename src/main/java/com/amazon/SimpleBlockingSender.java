@@ -120,8 +120,9 @@ public class SimpleBlockingSender implements Sender {
         try (var fin = new FileInputStream(source)) {
             var checksum = validate ? hash(source) : null;
             var header = new Header(senderName, source.getAbsolutePath(), source.length(), checksum);
-            logger.info("Sending upload request: {}", header);
-            s.getOutputStream().write(header.encode());
+            byte[] encoded = header.encode();
+            logger.info("Sending upload request: {} {}", encoded.length, header);
+            s.getOutputStream().write(encoded);
 
             // Wait for response for receiver to proceed.
             int proceed = s.getInputStream().read();
@@ -141,7 +142,7 @@ public class SimpleBlockingSender implements Sender {
                 s.getOutputStream().write(chunk, 0, read);
                 transferred += read;
             }
-            logger.info("Sent: {}", transferred);
+            logger.info("Sent: {} of {}", transferred, source.length());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
