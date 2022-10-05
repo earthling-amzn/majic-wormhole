@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.LongAdder;
 
 import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
 import static com.amazon.Wormhole.DEFAULT_THREAD_COUNT;
@@ -26,6 +27,8 @@ public class ChannelSender implements Sender {
     private final int chunkSize;
     private final boolean validate;
     private final int threadCount;
+    private final LongAdder filesTransferred = new LongAdder();
+    private final LongAdder bytesTransferred = new LongAdder();
 
     public ChannelSender(String senderName, int chunkSize, int threadCount, boolean validate) {
         this.senderName = senderName;
@@ -36,6 +39,16 @@ public class ChannelSender implements Sender {
 
     public ChannelSender(String senderName) {
         this(senderName, DEFAULT_CHUNK_SIZE, DEFAULT_THREAD_COUNT, true);
+    }
+
+    @Override
+    public long getFilesTransferred() {
+        return filesTransferred.longValue();
+    }
+
+    @Override
+    public long getBytesTransferred() {
+        return bytesTransferred.longValue();
     }
 
     public void send(File source, String host, int port) {
@@ -122,7 +135,7 @@ public class ChannelSender implements Sender {
 
             var checksum = validate ? Wormhole.hash(source) : null;
             var header = new Header(senderName, source.getAbsolutePath(), source.length(), checksum);
-            logger.info("Sending upload request: {}", header);
+            logger.debug("Sending upload request: {}", header);
             socket.write(ByteBuffer.wrap(header.encode()));
 
             var proceed = ByteBuffer.allocate(10);
@@ -144,7 +157,9 @@ public class ChannelSender implements Sender {
                 }
                 readFrom += transferred;
             }
-            logger.info("Upload complete: {}", header.filePath());
+            logger.debug("Upload complete: {}", header.filePath());
+            filesTransferred.increment();
+            bytesTransferred.add(source.length());
         }
     }
 }

@@ -76,9 +76,9 @@ public class ChannelReceiver implements Receiver {
                 logger.info("Waiting for upload threads to finish.");
                 try {
                     terminated = executor.awaitTermination(10, TimeUnit.SECONDS);
-                    logger.info("Terminated: {}", terminated);
+                    logger.debug("Terminated: {}", terminated);
                 } catch (InterruptedException e) {
-                    logger.info("Interrupted: {}", Thread.currentThread().isInterrupted());
+                    logger.debug("Interrupted: {}", Thread.currentThread().isInterrupted());
                 }
             } while (!terminated);
         }
@@ -99,7 +99,7 @@ public class ChannelReceiver implements Receiver {
             buffer.clear();
             int read = clientSocket.read(buffer);
             if (read <= 0) {
-                logger.warn("Did not read header: {}", read);
+                logger.debug("Did not read header: {}", read);
                 return false;
             }
 
@@ -120,7 +120,7 @@ public class ChannelReceiver implements Receiver {
 
                 long writeTo = 0;
                 long remaining = header.fileLength();
-                logger.info("Creating file at: <{}>", filePath);
+                logger.debug("Creating file at: <{}>", filePath);
                 try (var fileOutputStream = new FileOutputStream(filePath.toFile());
                      var fileChannel = fileOutputStream.getChannel()) {
 
@@ -152,7 +152,7 @@ public class ChannelReceiver implements Receiver {
                 if (validator != null) {
                     validator.validate();
                 }
-                logger.info("{} Received: {}, size: {}", clientSocket, filePath, writeTo);
+                logger.debug("{} Received: {}, size: {}", clientSocket, filePath, writeTo);
             }
         } catch (Exception e) {
             logger.warn("Error receiving file.", e);

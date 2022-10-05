@@ -11,6 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.LongAdder;
 
 import static com.amazon.Wormhole.*;
 
@@ -20,6 +21,8 @@ public class SimpleBlockingSender implements Sender {
     private final int chunkSize;
     private final boolean validate;
     private final int threadCount;
+    private final LongAdder filesTransferred = new LongAdder();
+    private final LongAdder bytesTransferred = new LongAdder();
 
     public SimpleBlockingSender(String sender, int chunkSize, int threadCount, boolean validate) {
         this.senderName = sender;
@@ -33,6 +36,16 @@ public class SimpleBlockingSender implements Sender {
     }
 
     @Override
+    public long getFilesTransferred() {
+        return filesTransferred.longValue();
+    }
+
+    @Override
+    public long getBytesTransferred() {
+        return bytesTransferred.longValue();
+    }
+
+    @Override
     public void send(File source, String host, int port) {
         if (!source.isDirectory()) {
             sendSingle(source, host, port);
@@ -43,7 +56,6 @@ public class SimpleBlockingSender implements Sender {
                 throw new RuntimeException(e);
             }
         }
-        logger.info("Send is complete.");
     }
 
     private void sendMultiple(File source, String host, int port) throws IOException {
@@ -121,17 +133,13 @@ public class SimpleBlockingSender implements Sender {
             var checksum = validate ? hash(source) : null;
             var header = new Header(senderName, source.getAbsolutePath(), source.length(), checksum);
             byte[] encoded = header.encode();
-            logger.info("Sending upload request: {} {}", encoded.length, header);
+            logger.debug("Sending upload request: {} {}", encoded.length, header);
             s.getOutputStream().write(encoded);
 
             // Wait for response for receiver to proceed.
             int proceed = s.getInputStream().read();
-            if (proceed == 0) {
-                logger.warn("Receiver rejected uploaded.");
-                return;
-            }
-            if (proceed == -1) {
-                logger.error("Read timed out");
+            if (proceed != 1) {
+                logger.warn("Cannot proceed with uploaded.");
                 return;
             }
 
@@ -142,7 +150,9 @@ public class SimpleBlockingSender implements Sender {
                 s.getOutputStream().write(chunk, 0, read);
                 transferred += read;
             }
-            logger.info("Sent: {} of {}", transferred, source.length());
+            logger.debug("Upload complete: {}", header.filePath());
+            filesTransferred.increment();
+            bytesTransferred.add(source.length());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

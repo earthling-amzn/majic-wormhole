@@ -4,4 +4,7 @@ import java.io.File;
 
 public interface Sender {
     void send(File source, String host, int port);
+
+    long getFilesTransferred();
+    long getBytesTransferred();
 }

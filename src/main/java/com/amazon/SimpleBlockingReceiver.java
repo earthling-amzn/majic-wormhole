@@ -82,7 +82,7 @@ public class SimpleBlockingReceiver implements Receiver {
             byte[] headerBytes =  new byte[1024];
             int read = clientSocket.getInputStream().read(headerBytes);
             if (read <= 0) {
-                logger.warn("{} Did not read header: {}", clientSocket, read);
+                logger.debug("{} Did not read header: {}", clientSocket, read);
                 return false;
             }
 
@@ -95,7 +95,7 @@ public class SimpleBlockingReceiver implements Receiver {
                 clientSocket.getOutputStream().write(0);
             } else {
                 clientSocket.getOutputStream().write(1);
-                logger.info("{} Accepted: {}", clientSocket, header);
+                logger.debug("{} Accepted: {}", clientSocket, header);
 
                 Path withoutRoot = Wormhole.removeRoot(header.filePath());
                 Path filePath = targetDirectory.resolve(withoutRoot);
@@ -127,7 +127,7 @@ public class SimpleBlockingReceiver implements Receiver {
                     validator.validate();
                 }
 
-                logger.info("{} Received: {}, size: {}", clientSocket, filePath, header.fileLength());
+                logger.debug("{} Received: {}, size: {}", clientSocket, filePath, header.fileLength());
             }
         } catch (IOException e) {
             logger.warn("Error receiving file.", e);

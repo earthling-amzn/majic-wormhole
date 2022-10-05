@@ -49,19 +49,47 @@ public class SenderCommand implements Runnable {
         // Try to get the address of the receiver so we know where to send the file
         var registration = getReceiverRegistration();
 
+        var sender = getSender();
         try {
-            var sender = getSender();
             start = System.nanoTime();
             sender.send(fileToSend.toFile(), registration.address(), registration.port());
         } finally {
             long end = System.nanoTime();
             String message = CommandLine.Help.Ansi.AUTO.string("@|bold,green Transfer complete. |@");
             System.out.println(message);
-            System.out.printf("Transfer time: %.5fs.\n", (end - start) / 1_000_000_000d);
+            double elapsed = (end - start) / 1_000_000_000d;
+            long transferred = sender.getBytesTransferred();
+            ByteUnit bytesTransferred = ByteUnit.forBytes(transferred);
+            ByteUnit transferRate = ByteUnit.forBytes((long) (transferred / elapsed));
+            System.out.printf("\tTime: %.5fs.\n\tFiles: %s\n\tBytes: %s%s (%s)\n\tRate: %s%s/s\n",
+                    elapsed, sender.getFilesTransferred(),
+                    bytesTransferred.value, bytesTransferred.units, transferred,
+                    transferRate.value, transferRate.units);
+        }
+    }
+
+    record ByteUnit(long value, String units) {
+        static ByteUnit forBytes(long bytes) {
+            final long KB = 1024;
+            if (bytes < KB) {
+                return new ByteUnit(bytes, "b");
+            }
+            bytes /= KB;
+            if (bytes < KB) {
+                return new ByteUnit(bytes, "kb");
+            }
+            bytes /= KB;
+            if (bytes < KB) {
+                return new ByteUnit(bytes, "mb");
+            }
+            bytes /= KB;
+            return new ByteUnit(bytes, "gb");
         }
     }
 
     private Sender getSender() {
+        System.out.printf("Use NIO? %s, Validate? %s, Chunk Size: %s, Threads: %s\n",
+                useDirect, validate, chunkSize, threadCount);
         return useDirect
                 ? new ChannelSender(senderName, chunkSize, threadCount, validate)
                 : new SimpleBlockingSender(senderName, chunkSize, threadCount, validate);
