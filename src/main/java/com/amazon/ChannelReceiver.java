@@ -5,23 +5,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
+import static com.amazon.Wormhole.*;
 
 public class ChannelReceiver implements Receiver {
     private static final Logger logger = LoggerFactory.getLogger(ChannelReceiver.class);
     private final int port;
     private final int chunkSize;
     private final boolean validate;
+    private final int threadCount;
 
     private final ThreadLocal<ByteBuffer> buffers;
     private Path targetDirectory;
@@ -30,15 +31,16 @@ public class ChannelReceiver implements Receiver {
 
     private volatile boolean shouldRun = true;
 
-    public ChannelReceiver(int port, int chunkSize, boolean validate) {
+    public ChannelReceiver(int port, int chunkSize, int threadCount, boolean validate) {
         this.port = port;
         this.chunkSize = chunkSize;
         this.validate = validate;
+        this.threadCount = threadCount;
         this.buffers = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(chunkSize));
     }
 
     public ChannelReceiver() {
-        this(9000, DEFAULT_CHUNK_SIZE, true);
+        this(DEFAULT_RECEIVER_PORT, DEFAULT_CHUNK_SIZE, DEFAULT_THREAD_COUNT, true);
     }
 
     @Override
@@ -48,17 +50,16 @@ public class ChannelReceiver implements Receiver {
 
     @Override
     public void receive() {
-        var executor = Executors.newFixedThreadPool(8, new NamingThreadFactory("rx"));
+        var executor = Executors.newFixedThreadPool(threadCount, new NamingThreadFactory("rx"));
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(port));
-            ss.configureBlocking(false);
             while (shouldRun) {
                 try {
                     var clientSocket = ss.accept();
-                    executor.submit(() -> receiveFile(clientSocket));
+                    executor.submit(() -> receiveFiles(clientSocket));
                 } catch (ClosedByInterruptException ignore) {
+                    //noinspection ResultOfMethodCallIgnored
                     Thread.interrupted();
-
                     if (shouldRun) {
                         logger.warn("Expected shouldRun to be false when interrupted.");
                         break;
@@ -83,16 +84,22 @@ public class ChannelReceiver implements Receiver {
         }
     }
 
-    private void receiveFile(SocketChannel clientSocket) {
+    private void receiveFiles(SocketChannel clientSocket) {
+        boolean received;
+        do {
+            received = receiveFile(clientSocket);
+        } while (clientSocket.isConnected() && received);
+    }
+
+    private boolean receiveFile(SocketChannel clientSocket) {
         try {
             var validator = validate ? new Validator() : null;
             var headers = new byte[1024];
             var headerBuffer = ByteBuffer.wrap(headers);
             int read = clientSocket.read(headerBuffer);
             if (read <= 0) {
-                System.out.println("Did not read header");
-                clientSocket.write(ByteBuffer.wrap(new byte[] {0}));
-                return;
+                logger.warn("Did not read header: {}", read);
+                return false;
             }
 
             var header = Header.decode(headers);
@@ -104,15 +111,19 @@ public class ChannelReceiver implements Receiver {
                 clientSocket.write(ByteBuffer.wrap(new byte[] {0}));
             } else {
                 clientSocket.write(ByteBuffer.wrap(new byte[] {1}));
-                var filePath = targetDirectory.resolve(header.filePath());
+                Path withoutRoot = Wormhole.removeRoot(header.filePath());
+                var filePath = targetDirectory.resolve(withoutRoot);
+                Files.createDirectories(filePath.getParent());
+
                 long writeTo = 0;
                 var buffer = this.buffers.get();
-                buffer.clear();
+
                 logger.info("Creating file at: <{}>", filePath);
                 try (var fileOutputStream = new FileOutputStream(filePath.toFile());
                      var fileChannel = fileOutputStream.getChannel()) {
 
                     while (true) {
+                        buffer.clear();
                         read = clientSocket.read(buffer);
                         if (read <= 0) {
                             break;
@@ -128,7 +139,9 @@ public class ChannelReceiver implements Receiver {
                         }
 
                         writeTo += wrote;
-                        buffer.clear();
+                        if (writeTo == header.fileLength()) {
+                            break;
+                        }
                     }
                 }
 
@@ -137,9 +150,11 @@ public class ChannelReceiver implements Receiver {
                 }
                 logger.info("{} Received: {}, size: {}", clientSocket, filePath, writeTo);
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
+            logger.warn("Error receiving file.", e);
             throw new RuntimeException(e);
         }
+        return true;
     }
 
     @Override

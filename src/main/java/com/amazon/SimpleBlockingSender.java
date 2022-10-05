@@ -13,22 +13,23 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 
 import static com.amazon.Wormhole.*;
-import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
 
 public class SimpleBlockingSender implements Sender {
     private static final Logger logger = LoggerFactory.getLogger(SimpleBlockingSender.class);
     private final String senderName;
     private final int chunkSize;
     private final boolean validate;
+    private final int threadCount;
 
-    public SimpleBlockingSender(String sender, int chunkSize, boolean validate) {
+    public SimpleBlockingSender(String sender, int chunkSize, int threadCount, boolean validate) {
         this.senderName = sender;
         this.chunkSize = chunkSize;
         this.validate = validate;
+        this.threadCount = threadCount;
     }
 
     public SimpleBlockingSender(String sender) {
-        this(sender, DEFAULT_CHUNK_SIZE, true);
+        this(sender, DEFAULT_CHUNK_SIZE, DEFAULT_THREAD_COUNT, true);
     }
 
     @Override
@@ -50,8 +51,8 @@ public class SimpleBlockingSender implements Sender {
         queue.addLast(source);
         ExecutorService executor = null;
         try  {
-            executor = Executors.newFixedThreadPool(8, new NamingThreadFactory("tx"));
-            for (int i = 0; i < 8; ++i) {
+            executor = Executors.newFixedThreadPool(threadCount, new NamingThreadFactory("tx"));
+            for (int i = 0; i < threadCount; ++i) {
                 executor.submit(() -> processWork(queue, host, port));
             }
         } finally {
@@ -118,7 +119,7 @@ public class SimpleBlockingSender implements Sender {
     private void transfer(File source, Socket s) {
         try (var fin = new FileInputStream(source)) {
             var checksum = validate ? hash(source) : null;
-            var header = new Header(senderName, source.getName(), source.length(), checksum);
+            var header = new Header(senderName, source.getAbsolutePath(), source.length(), checksum);
             logger.info("Sending upload request: {}", header);
             s.getOutputStream().write(header.encode());
 

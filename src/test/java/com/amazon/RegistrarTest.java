@@ -7,6 +7,7 @@ import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+import static com.amazon.Wormhole.DEFAULT_RECEIVER_PORT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @MicronautTest
@@ -19,17 +20,17 @@ public class RegistrarTest {
     void testCreateRegistration() {
         var request = HttpRequest.GET("/register");
         request.getParameters().add("username", "Dr. Rock");
-        request.getParameters().add("target", "9000");
+        request.getParameters().add("target", String.valueOf(DEFAULT_RECEIVER_PORT));
         Registration response = client.toBlocking().retrieve(request, Registration.class);
         assertEquals("127.0.0.1", response.address());
-        assertEquals(9000, response.port());
+        assertEquals(DEFAULT_RECEIVER_PORT, response.port());
     }
 
     @Test
     void testFetchValidRegistration() {
         var register = HttpRequest.GET("/register");
         register.getParameters().add("username", "Dr. Rock");
-        register.getParameters().add("target", "9000");
+        register.getParameters().add("target", String.valueOf(DEFAULT_RECEIVER_PORT));
         Registration created = client.toBlocking().retrieve(register, Registration.class);
         var fetch = HttpRequest.GET("/fetch");
         fetch.getParameters().add("receiver", "Dr. Rock");

@@ -1,15 +1,20 @@
 package com.amazon;
 
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static com.amazon.Wormhole.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SenderTest {
 
@@ -33,16 +38,16 @@ public class SenderTest {
 
     @Test
     public void testAcceptedBySimpleReceiver() throws Exception {
-        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
-        var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var receiver = new SimpleBlockingReceiver();
+        var sender = new SimpleBlockingSender("sender");
 
         testAcceptedByReceiver(receiver, sender);
     }
 
     @Test
     public void testAcceptedByChannelReceiver() throws Exception {
-        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
-        var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var receiver = new ChannelReceiver();
+        var sender = new ChannelSender("sender");
 
         testAcceptedByReceiver(receiver, sender);
     }
@@ -56,7 +61,7 @@ public class SenderTest {
         setupChannelReceiver(receiver);
 
         try {
-            sender.send(transferFile, "127.0.0.1", 9000);
+            sender.send(transferFile, "127.0.0.1", DEFAULT_RECEIVER_PORT);
         } finally {
             teardownReceiver();
         }
@@ -66,16 +71,16 @@ public class SenderTest {
 
     @Test
     public void testRejectedByChannelReceiver() throws Exception {
-        var receiver = new ChannelReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
-        var sender = new ChannelSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var receiver = new ChannelReceiver();
+        var sender = new ChannelSender("sender");
 
         testRejectedByReceiver(receiver, sender);
     }
 
     @Test
     public void testRejectedBySimpleReceiver() throws Exception {
-        var receiver = new SimpleBlockingReceiver(9000, Wormhole.DEFAULT_CHUNK_SIZE, true);
-        var sender = new SimpleBlockingSender("sender", Wormhole.DEFAULT_CHUNK_SIZE, true);
+        var receiver = new SimpleBlockingReceiver();
+        var sender = new SimpleBlockingSender("sender");
 
         testRejectedByReceiver(receiver, sender);
     }
@@ -89,7 +94,7 @@ public class SenderTest {
         setupChannelReceiver(receiver);
 
         try {
-            sender.send(transferFile, "127.0.0.1", 9000);
+            sender.send(transferFile, "127.0.0.1", DEFAULT_RECEIVER_PORT);
         } finally {
             teardownReceiver();
         }
@@ -105,31 +110,76 @@ public class SenderTest {
     }
 
     @Test
+    public void testSendDirectoryWithSingleThreadedSimpleReceiver() throws Exception {
+        var receiver = new SimpleBlockingReceiver(DEFAULT_RECEIVER_PORT, DEFAULT_CHUNK_SIZE, 1, true);
+        var sender = new SimpleBlockingSender("sender");
+        testSendDirectory(receiver, sender);
+    }
+
+    @Test
+    public void testSendDirectoryWithSingleThreadedSimpleSender() throws Exception {
+        var receiver = new SimpleBlockingReceiver();
+        var sender = new SimpleBlockingSender("sender", DEFAULT_CHUNK_SIZE, 1, true);
+        testSendDirectory(receiver, sender);
+    }
+
+    @Test
     public void testSendDirectoryWithChannelReceiver() throws Exception {
         var receiver = new ChannelReceiver();
         var sender = new ChannelSender("sender");
         testSendDirectory(receiver, sender);
     }
 
+    @Test
+    public void testSendDirectoryWithSingleThreadedChannelReceiver() throws Exception {
+        var receiver = new ChannelReceiver(DEFAULT_RECEIVER_PORT, DEFAULT_CHUNK_SIZE, 1, true);
+        var sender = new ChannelSender("sender");
+        testSendDirectory(receiver, sender);
+    }
+
+    @Test
+    public void testSendDirectoryWithSingleThreadedChannelSender() throws Exception {
+        var receiver = new ChannelReceiver();
+        var sender = new ChannelSender("sender", DEFAULT_CHUNK_SIZE, DEFAULT_THREAD_COUNT, true);
+        testSendDirectory(receiver, sender);
+    }
+
     private void testSendDirectory(Receiver receiver, Sender sender) throws Exception {
+        final var fileCount = 5;
         var targetDirectory = Files.createTempDirectory("directory-test");
-        var sourceDirectory = populateSourceDirectory(5);
+        var sourceDirectory = populateSourceDirectory(fileCount);
 
         receiver.setAcceptor((username, filename, length) -> true);
         receiver.setTargetDirectory(targetDirectory);
         setupChannelReceiver(receiver);
 
         try {
-            sender.send(sourceDirectory.toFile(), "127.0.0.1", 9000);
+            sender.send(sourceDirectory.toFile(), "127.0.0.1", DEFAULT_RECEIVER_PORT);
         } finally {
             teardownReceiver();
         }
-        assertEquals(5, getFileCount(targetDirectory));
+        assertEquals(fileCount, getFileCount(targetDirectory));
     }
 
-    private static int getFileCount(Path targetDirectory) {
-        File[] files = targetDirectory.toFile().listFiles();
-        return files != null ? files.length : 0;
+    private static long getFileCount(Path targetDirectory) {
+        class FileCounter extends SimpleFileVisitor<Path> {
+            long count = 0;
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                if (Files.isRegularFile(file)) {
+                    ++count;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        }
+
+        try {
+            var counter = new FileCounter();
+            Files.walkFileTree(targetDirectory, counter);
+            return counter.count;
+        } catch (IOException e) {
+            return 0;
+        }
     }
 
     private Path populateSourceDirectory(int fileCount) throws IOException {

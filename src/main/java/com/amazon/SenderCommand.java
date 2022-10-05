@@ -8,10 +8,10 @@ import picocli.CommandLine.Option;
 
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
+import static com.amazon.Wormhole.DEFAULT_THREAD_COUNT;
 
 @Command(name = "send", description = "...",
         mixinStandardHelpOptions = true)
@@ -26,7 +26,7 @@ public class SenderCommand implements Runnable {
     @Option(names = {"-s", "--sender"}, description = "Your name, will be shown to receiver")
     String senderName;
 
-    @Option(names = {"-t", "--receiver"}, description = "The name of a registered receiver")
+    @Option(names = {"-e", "--receiver"}, description = "The name of a registered receiver")
     String receiverName;
 
     @Option(names = {"-d", "--direct"}, description = "Use direct buffers for file transfer.")
@@ -38,14 +38,13 @@ public class SenderCommand implements Runnable {
     @Option(names = {"-v", "--validate"}, description = "Send checksum of transferred file for validation")
     boolean validate;
 
+    @Option(names = {"-t", "--threads"}, description = "Number of threads to use for sending files")
+    int threadCount = DEFAULT_THREAD_COUNT;
+
     @Override
     @Command(name = "send")
     public void run() {
         long start = System.nanoTime();
-        if (!Files.isRegularFile(fileToSend)) {
-            printError("Not a regular file: " + fileToSend);
-            System.exit(2);
-        }
 
         // Try to get the address of the receiver so we know where to send the file
         var registration = getReceiverRegistration();
@@ -64,13 +63,8 @@ public class SenderCommand implements Runnable {
 
     private Sender getSender() {
         return useDirect
-                ? new ChannelSender(senderName, chunkSize, validate)
-                : new SimpleBlockingSender(senderName, chunkSize, validate);
-    }
-
-    private void printError(String message) {
-        String error = CommandLine.Help.Ansi.AUTO.string("@|bold,red " + message + " |@");
-        System.out.println(error);
+                ? new ChannelSender(senderName, chunkSize, threadCount, validate)
+                : new SimpleBlockingSender(senderName, chunkSize, threadCount, validate);
     }
 
     private Registration getReceiverRegistration() {

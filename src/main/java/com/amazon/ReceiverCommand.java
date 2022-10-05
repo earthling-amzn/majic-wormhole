@@ -11,7 +11,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
+import static com.amazon.Wormhole.*;
 import static picocli.CommandLine.Command;
 import static picocli.CommandLine.Option;
 
@@ -24,7 +24,7 @@ public class ReceiverCommand implements Runnable {
     @Option(names = {"-u", "--username"}, description = "Your receiver name.", required = true)
     String receiverName;
 
-    @Option(names = {"-t", "--target-dir"}, description = "Save file here, override suggested file name")
+    @Option(names = {"-D", "--target-dir"}, description = "Save file here, override suggested file name")
     Path targetDirectory;
 
     @Option(names = {"-y", "--accept"}, description = "Accept all files without prompting (for testing).")
@@ -34,7 +34,7 @@ public class ReceiverCommand implements Runnable {
     boolean runForever = false;
 
     @Option(names = {"-p", "--port"}, description = "Port to listen on.")
-    int port = 9000;
+    int port = DEFAULT_RECEIVER_PORT;
 
     @Option(names = {"-d", "--direct"}, description = "Use direct buffers for file transfer.")
     boolean useDirect = false;
@@ -44,6 +44,9 @@ public class ReceiverCommand implements Runnable {
 
     @Option(names = {"-v", "--validate"}, description = "Validate checksum (md5) of received file")
     boolean validate = false;
+
+    @Option(names = {"-t", "--threads"}, description = "Number of threads to use for sending files")
+    int threadCount = DEFAULT_THREAD_COUNT;
 
     public static boolean deferToUser(String sender, String filename, long length) {
         while (true) {
@@ -89,8 +92,8 @@ public class ReceiverCommand implements Runnable {
 
     private Receiver getReceiver() {
         return useDirect
-                ? new ChannelReceiver(port, chunkSize, validate)
-                : new SimpleBlockingReceiver(port, chunkSize, validate);
+                ? new ChannelReceiver(port, chunkSize, threadCount, validate)
+                : new SimpleBlockingReceiver(port, chunkSize, threadCount, validate);
     }
 
     private Registration createRegistration() {

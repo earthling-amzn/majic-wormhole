@@ -17,6 +17,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 
 import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
+import static com.amazon.Wormhole.DEFAULT_THREAD_COUNT;
 
 public class ChannelSender implements Sender {
     private static final Logger logger = LoggerFactory.getLogger(ChannelSender.class);
@@ -24,15 +25,17 @@ public class ChannelSender implements Sender {
     private final String senderName;
     private final int chunkSize;
     private final boolean validate;
+    private final int threadCount;
 
-    public ChannelSender(String senderName, int chunkSize, boolean validate) {
+    public ChannelSender(String senderName, int chunkSize, int threadCount, boolean validate) {
         this.senderName = senderName;
         this.chunkSize = chunkSize;
         this.validate = validate;
+        this.threadCount = threadCount;
     }
 
     public ChannelSender(String senderName) {
-        this(senderName, DEFAULT_CHUNK_SIZE, true);
+        this(senderName, DEFAULT_CHUNK_SIZE, DEFAULT_THREAD_COUNT, true);
     }
 
     public void send(File source, String host, int port) {
@@ -48,8 +51,8 @@ public class ChannelSender implements Sender {
         queue.addLast(source);
         ExecutorService executor = null;
         try  {
-            executor = Executors.newFixedThreadPool(8, new NamingThreadFactory("tx"));
-            for (int i = 0; i < 8; ++i) {
+            executor = Executors.newFixedThreadPool(threadCount, new NamingThreadFactory("tx"));
+            for (int i = 0; i < threadCount; ++i) {
                 executor.submit(() -> processWork(queue, host, port));
             }
         } finally {
@@ -95,6 +98,7 @@ public class ChannelSender implements Sender {
                 }
             }
         } catch (IOException e) {
+            logger.warn("Error sending file", e);
             throw new RuntimeException(e);
         } finally {
             if (socket != null) {
@@ -117,7 +121,7 @@ public class ChannelSender implements Sender {
         try (FileInputStream fileInputStream = new FileInputStream(source)) {
 
             var checksum = validate ? Wormhole.hash(source) : null;
-            var header = new Header(senderName, source.getName(), source.length(), checksum);
+            var header = new Header(senderName, source.getAbsolutePath(), source.length(), checksum);
             logger.info("Sending upload request: {}", header);
             socket.write(ByteBuffer.wrap(header.encode()));
 
@@ -140,6 +144,7 @@ public class ChannelSender implements Sender {
                 }
                 readFrom += transferred;
             }
+            logger.info("Upload complete: {}", header.filePath());
         }
     }
 }

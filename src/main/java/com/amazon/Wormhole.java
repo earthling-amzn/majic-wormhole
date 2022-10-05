@@ -8,6 +8,8 @@ import picocli.CommandLine;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ThreadFactory;
@@ -16,6 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @CommandLine.Command(name="wormhole", subcommands = {SenderCommand.class, ReceiverCommand.class})
 public class Wormhole implements Runnable {
     public static final int DEFAULT_CHUNK_SIZE = 10 * 1024 * 1024;
+    public static final int DEFAULT_THREAD_COUNT = Runtime.getRuntime().availableProcessors();
+
+    public static final int DEFAULT_RECEIVER_PORT = 9000;
 
     public static void main(String[] args) {
         long start = System.nanoTime();
@@ -51,6 +56,11 @@ public class Wormhole implements Runnable {
             sb.append(Character.forDigit((b & 0xF), 16));
         }
         return sb.toString();
+    }
+
+    static Path removeRoot(String filePath) {
+        Path other = Paths.get(filePath);
+        return other.subpath(1, other.getNameCount());
     }
 
     @Override
