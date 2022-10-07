@@ -1,14 +1,19 @@
 package com.amazon;
 
 import io.micronaut.http.HttpRequest;
+import io.micronaut.http.client.DefaultHttpClientConfiguration;
 import io.micronaut.http.client.HttpClient;
+import io.micronaut.http.client.exceptions.ReadTimeoutException;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Path;
+import java.time.Duration;
 
 import static com.amazon.Wormhole.DEFAULT_CHUNK_SIZE;
 import static com.amazon.Wormhole.DEFAULT_THREAD_COUNT;
@@ -41,31 +46,58 @@ public class SenderCommand implements Runnable {
     @Option(names = {"-t", "--threads"}, description = "Number of threads to use for sending files")
     int threadCount = DEFAULT_THREAD_COUNT;
 
+    @Option(names = {"-x", "--stats"}, description = "Write stats to file in CSV")
+    Path statsFilePath;
+
+    @Option(names = {"-p", "--repeat"}, description = "Repeat command N times.")
+    int repeatCount = 1;
+
     @Override
     @Command(name = "send")
     public void run() {
-        long start = System.nanoTime();
-
         // Try to get the address of the receiver so we know where to send the file
         var registration = getReceiverRegistration();
-
         var sender = getSender();
-        try {
-            start = System.nanoTime();
+        double elapsed = 0;
+
+        for (int i = 0; i < repeatCount; ++i) {
+            var start = System.nanoTime();
             sender.send(fileToSend.toFile(), registration.address(), registration.port());
-        } finally {
             long end = System.nanoTime();
-            String message = CommandLine.Help.Ansi.AUTO.string("@|bold,green Transfer complete. |@");
+
+            elapsed = (end - start) / 1_000_000_000d;
+            String message = CommandLine.Help.Ansi.AUTO.string("@|bold,green Transfer completed: " + elapsed + "s. |@");
             System.out.println(message);
-            double elapsed = (end - start) / 1_000_000_000d;
-            long transferred = sender.getBytesTransferred();
-            ByteUnit bytesTransferred = ByteUnit.forBytes(transferred);
-            ByteUnit transferRate = ByteUnit.forBytes((long) (transferred / elapsed));
-            System.out.printf("\tTime: %.5fs.\n\tFiles: %s\n\tBytes: %s%s (%s)\n\tRate: %s%s/s\n",
-                    elapsed, sender.getFilesTransferred(),
-                    bytesTransferred.value, bytesTransferred.units, transferred,
-                    transferRate.value, transferRate.units);
         }
+
+        if (statsFilePath != null) {
+            writeStatsToFile(sender, elapsed);
+        } else {
+            printStatsToConsole(sender, elapsed);
+        }
+    }
+
+    private void writeStatsToFile(Sender sender, double elapsed) {
+        try (FileWriter writer = new FileWriter(statsFilePath.toFile(), true)) {
+            long transferred = sender.getBytesTransferred();
+            writer.write(String.valueOf(elapsed));
+            writer.write(",");
+            writer.write(String.valueOf(transferred));
+            writer.write(",");
+            writer.write(String.valueOf(sender.getFilesTransferred()));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void printStatsToConsole(Sender sender, double elapsed) {
+        long transferred = sender.getBytesTransferred();
+        ByteUnit bytesTransferred = ByteUnit.forBytes(transferred);
+        ByteUnit transferRate = ByteUnit.forBytes((long) (transferred / elapsed));
+        System.out.printf("\tTime: %.5fs.\n\tFiles: %s\n\tBytes: %s%s (%s)\n\tRate: %s%s/s\n",
+                elapsed, sender.getFilesTransferred(),
+                bytesTransferred.value, bytesTransferred.units, transferred,
+                transferRate.value, transferRate.units);
     }
 
     record ByteUnit(long value, String units) {
@@ -96,12 +128,26 @@ public class SenderCommand implements Runnable {
     }
 
     private Registration getReceiverRegistration() {
-        try (var client = HttpClient.create(new URL(registrarAddress))) {
-            var request = HttpRequest.GET("/fetch");
-            request.getParameters().add("receiver", receiverName);
-            return client.toBlocking().retrieve(request, Registration.class);
-        } catch (MalformedURLException e) {
-            throw new RuntimeException(e);
+        var configuration = new DefaultHttpClientConfiguration();
+        configuration.setNumOfThreads(1);
+        configuration.setReadTimeout(Duration.ofSeconds(3));
+        final var maxTries = 5;
+        var tries = 0;
+        while (true) {
+            ++tries;
+            try (var client = HttpClient.create(new URL(registrarAddress), configuration)) {
+                var request = HttpRequest.GET("/fetch");
+                request.getParameters().add("receiver", receiverName);
+                return client.toBlocking().retrieve(request, Registration.class);
+            } catch (MalformedURLException e) {
+                throw new RuntimeException(e);
+            } catch (ReadTimeoutException e) {
+                if (tries >= maxTries) {
+                    throw e;
+                } else {
+                    System.out.println("Registration timed out, retries remaining: " + (maxTries - tries));
+                }
+            }
         }
     }
 }
