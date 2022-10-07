@@ -83,6 +83,7 @@ public class SimpleBlockingSender implements Sender {
 
     private void processWork(LinkedBlockingDeque<File> files, String host, int port) {
         Socket socket = null;
+        byte[] chunk = new byte[chunkSize];
         try {
             while (true) {
                 try {
@@ -95,7 +96,7 @@ public class SimpleBlockingSender implements Sender {
                         if (socket == null) {
                             socket = new Socket(host, port);
                         }
-                        transfer(file, socket);
+                        transfer(file, socket, chunk);
                     } else {
                         File[] children = file.listFiles();
                         if (children != null && children.length > 0) {
@@ -122,13 +123,13 @@ public class SimpleBlockingSender implements Sender {
 
     private void sendSingle(File source, String host, int port) {
         try (Socket s = new Socket(host, port)) {
-            transfer(source, s);
+            transfer(source, s, new byte[chunkSize]);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private void transfer(File source, Socket s) {
+    private void transfer(File source, Socket s, byte[] chunk) {
         try (var fin = new FileInputStream(source)) {
             var checksum = validate ? hash(source) : null;
             var header = new Header(senderName, source.getAbsolutePath(), source.length(), checksum);
@@ -145,7 +146,6 @@ public class SimpleBlockingSender implements Sender {
 
             int transferred = 0;
             int read;
-            byte[] chunk = new byte[chunkSize];
             while ((read = fin.read(chunk)) != -1) {
                 s.getOutputStream().write(chunk, 0, read);
                 transferred += read;
