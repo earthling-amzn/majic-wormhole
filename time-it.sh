@@ -85,11 +85,11 @@ time_hotspot()
   start_registry $java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xlog:safepoint=info,gc*=info:/tmp/registry.log -jar wormhole-0.1.jar
   start_receiver $java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xlog:safepoint=info,gc*=info:/tmp/receiver.log -jar wormhole-0.1.jar recv --username recv --target-dir $TARGET_DIR --accept --forever --direct
 
-  sender="$java -XX:+UseSerialGC -XX:MetaspaceSize=512m -XX:-UsePerfData -XX:-TieredCompilation -Xlog:safepoint=info,heap+exit=info -jar wormhole-0.1.jar send --receiver recv --sender me --stats timings.csv"
+  sender="$java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xms512m -Xmx512m -XX:NativeMemoryTracking=detail -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics -XX:-UsePerfData -XX:-TieredCompilation -Xlog:safepoint=info -jar wormhole-0.1.jar send --receiver recv --sender me --stats timings.csv"
 #  time_it $sender --file "$1" --direct --validate --threads 8
-  time_it "hotspot-nio" $sender --file "$1" --direct --threads 8
+  time_it "hotspot-nio" $sender --file "$1" --direct --threads 8 --chunk $((1024 * 1024 * 1))
 #  time_it $sender --file "$1" --validate --threads 8
-  time_it "hotspot" $sender --file "$1" --threads 8
+  time_it "hotspot" $sender --file "$1" --threads 8 --chunk $((1024 * 1024 * 100))
 
   stop_all
 }
@@ -117,6 +117,7 @@ time_rust()
   description=$1
   wormhole=$2
   source=$3
+  buffer_size=$((100 * 1024 * 1024))
 
   start_registry $wormhole registry
   start_receiver $wormhole receive recv 9000 $TARGET_DIR
@@ -138,16 +139,16 @@ time_rust_blocking()
 {
   echo "Timing Rust (Blocking)"
   source=$1
-  wormhole=$HOME/Development/rusticwormhole/rusticwormhole-blocking
+  wormhole=$HOME/Development/rusticwormhole/target/release/rusticwormhole
   time_rust "rust-blocking" $wormhole $source
 }
 
 if [ ! -d "$1" ]
 then
   time_rust_async "$1"
-  time_rust_blocking "$1"
 fi
 
 time_graal "$1"
+time_rust_blocking "$1"
 
 time_hotspot "$1"
