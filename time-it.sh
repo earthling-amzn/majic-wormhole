@@ -76,20 +76,33 @@ stop_all()
   jobs
 }
 
+time_hotspot_http()
+{
+  echo "Timing Hotspot Http"
+  export JAVA_HOME=/usr/lib/jvm/java-18-amazon-corretto
+  java=$JAVA_HOME/bin/java
+
+  start_registry $java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xlog:safepoint=info,gc*=info:/tmp/registry.log -jar wormhole-http-0.1.jar
+  start_receiver $java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xlog:safepoint=info,gc*=info:/tmp/receiver.log -Dmicronaut.server.port=9000 -jar wormhole-http-0.1.jar recv --username recv --target-dir $TARGET_DIR --accept
+
+  sender="$java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xms512m -Xmx512m -XX:-UsePerfData -XX:-TieredCompilation -Xlog:safepoint=info -jar wormhole-http-0.1.jar send --receiver recv --sender me --stats timings.csv"
+  time_it "hotspot-http" $sender --file "$1"
+
+  stop_all
+}
+
 time_hotspot()
 {
   echo "Timing Hotspot"
-  export JAVA_HOME=$HOME/Development/genshen/build/linux-x86_64-server-release/jdk
+  export JAVA_HOME=/usr/lib/jvm/java-18-amazon-corretto
   java=$JAVA_HOME/bin/java
 
   start_registry $java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xlog:safepoint=info,gc*=info:/tmp/registry.log -jar wormhole-0.1.jar
-  start_receiver $java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xlog:safepoint=info,gc*=info:/tmp/receiver.log -jar wormhole-0.1.jar recv --username recv --target-dir $TARGET_DIR --accept --forever --direct
+  start_receiver $java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xlog:safepoint=info,gc*=info:/tmp/receiver.log -jar wormhole-0.1.jar recv --username recv --target-dir $TARGET_DIR --accept
 
-  sender="$java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xms512m -Xmx512m -XX:NativeMemoryTracking=detail -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics -XX:-UsePerfData -XX:-TieredCompilation -Xlog:safepoint=info -jar wormhole-0.1.jar send --receiver recv --sender me --stats timings.csv"
-#  time_it $sender --file "$1" --direct --validate --threads 8
-  time_it "hotspot-nio" $sender --file "$1" --direct --threads 8 --chunk $((1024 * 1024 * 1))
-#  time_it $sender --file "$1" --validate --threads 8
-  time_it "hotspot" $sender --file "$1" --threads 8 --chunk $((1024 * 1024 * 100))
+  sender="$java -XX:+UseSerialGC -XX:MetaspaceSize=512m -Xms512m -Xmx512m -XX:-UsePerfData -XX:-TieredCompilation -Xlog:safepoint=info -jar wormhole-0.1.jar send --receiver recv --sender me --stats timings.csv"
+  time_it "hotspot-oio" $sender --file "$1"
+  time_it "hotspot-nio" $sender --file "$1" --direct
 
   stop_all
 }
@@ -100,14 +113,25 @@ time_graal()
   wormhole=$HOME/Development/wormhole/wormhole
 
   start_registry $wormhole
-  start_receiver $wormhole recv --username recv --target-dir $TARGET_DIR --accept --forever --direct
+  start_receiver $wormhole -Dmicronaut.server.port=9000 recv --username recv --target-dir $TARGET_DIR --accept
 
-  sender="$wormhole send --receiver recv --sender me --stats timings.csv"
+  sender="$wormhole -Xms512m -Xmx512m send --receiver recv --sender me --stats timings.csv"
+  time_it "graal-oio" $sender --file "$1"
+  time_it "graal-nio" $sender --file "$1"  --direct
 
-#  time_it $sender --file "$1" --direct --validate --threads 8
-  time_it "graal-nio" $sender --file "$1" --direct --threads 8
-#  time_it $sender --file "$1" --validate --threads 8
-  time_it "graal" $sender --file "$1" --threads 8
+  stop_all
+}
+
+time_graal_http()
+{
+  echo "Timing Graal Native Image Http"
+  wormhole=$HOME/Development/wormhole/wormhole-http
+
+  start_registry $wormhole
+  start_receiver $wormhole -Dmicronaut.server.port=9000 recv --username recv --target-dir $TARGET_DIR --accept
+
+  sender="$wormhole -Xms512m -Xmx512m send --receiver recv --sender me --stats timings.csv"
+  time_it "graal-http" $sender --file "$1"
 
   stop_all
 }
@@ -135,20 +159,39 @@ time_rust_async()
   time_rust "rust-async" $wormhole $source
 }
 
-time_rust_blocking()
+time_rust_blocking_v1()
+{
+  echo "Timing Rust (Blocking Tokio FS)"
+  source=$1
+  wormhole=$HOME/Development/rusticwormhole/rusticwormhole-blocking-tokio-fs
+  time_rust "rust-blocking-with-tokio-fs" $wormhole $source
+}
+
+time_rust_blocking_v2()
 {
   echo "Timing Rust (Blocking)"
   source=$1
-  wormhole=$HOME/Development/rusticwormhole/target/release/rusticwormhole
-  time_rust "rust-blocking" $wormhole $source
+  wormhole=$HOME/Development/rusticwormhole/rusticwormhole-blocking
+  time_rust "rust-blocking-without-tokio-fs" $wormhole $source
+}
+
+time_rust_blocking_v3()
+{
+  echo "Timing Rust (Blocking Parallel)"
+  source=$1
+  wormhole=$HOME/Development/rusticwormhole/rusticwormhole-blocking-parallel
+  time_rust "rust-blocking-parallel" $wormhole $source
 }
 
 if [ ! -d "$1" ]
 then
   time_rust_async "$1"
+  time_rust_blocking_v1 "$1"
+  time_rust_blocking_v2 "$1"
+  time_graal_http "$1"
+  time_hotspot_http "$1"
 fi
 
+time_rust_blocking_v3 "$1"
 time_graal "$1"
-time_rust_blocking "$1"
-
 time_hotspot "$1"
